@@ -1,4 +1,5 @@
 import numpy as np
+import copy
 
 
 class Glucose(object):
@@ -18,7 +19,9 @@ class Glucose(object):
   MU_ACTIVITY_MOD = 31
   SIGMA_ACTIVITY_MOD = 5
   SIGMA_NOISE = 5
-  COEF = np.array([10, 0.9, 0.1, 0.1, -0.01, -0.01, -10, -4])
+  # Coefficients correspond to
+  # intercept, current glucose food activity, previous glucose food activity, current action, previous action
+  COEF = np.array([10, 0.9, 0.1, -0.01, 0.0, 0.1, -0.01, -10, -4])
 
   # Test states
   HYPOGLYCEMIC = np.array([50, 0, 33, 50, 0, 0, 0, 0])
@@ -27,24 +30,25 @@ class Glucose(object):
   def __init__(self, horizon):
     self.R = []  # List of rewards at each time step
     self.A = []  # List of actions at each time step
-    self.S = []  # List of raw states at each time step
-    self.t = 0
+    self.X = []  # List of features (previous and current states) at each time step
+    self.t = -1
     self.horizon = horizon
+    self.current_state = self.last_state = self.last_action = None
 
   @staticmethod
   def reward_function(s_prev, s):
     """
 
-    :param sprev: state vector at previous time step
+    :param s_prev: state vector at previous time step
     :param s: state vector
     :return:
     """
     new_glucose = s[0]
-    last_glucose = sprev[0]
+    last_glucose = s_prev[0]
 
     # Reward from this timestep
     r_1 = (new_glucose < 70) * (-0.005 * new_glucose**2 + 0.95 * new_glucose - 45) + \
-         (new_glucose >= 70) * (-0.00017 * new_glucose**2 + 0.02167 * new_glucose - 0.5)
+          (new_glucose >= 70) * (-0.00017 * new_glucose**2 + 0.02167 * new_glucose - 0.5)
 
     # Reward from previous timestep
     r2 = (last_glucose < 70)*(-0.005*last_glucose**2 + 0.95*last_glucose - 45) + \
@@ -69,11 +73,11 @@ class Glucose(object):
     """
     food, activity = self.generate_food_and_activity()
     glucose = np.random.normal(Glucose.MU_GLUCOSE, Glucose.SIGMA_GLUCOSE)
-    s3 = 100.0
-    s4, s5, s6, s7 = 0.0, 0.0, 0.0, 0.0
-    s = np.array([glucose, food, activity, s3, s4, s5, s6, s7])
-
-    self.S.append(s)
+    x = np.array([1, glucose, food, activity, glucose, food, activity])
+    self.current_state = self.last_state = np.array([glucose, food, activity])
+    self.last_action = 0
+    self.t += 1
+    self.X.append(x)
     return
 
   def next_state_and_reward(self, action):
@@ -82,41 +86,46 @@ class Glucose(object):
     :param action:
     :return:
     """
-    # Transition model depends on previous two actions and states
-    last_state = self.S[-1]
-    if self.t > 1:
-      state_before_last = self.S[-2]
-      last_action = self.A[-1]
-    else:
-      state_before_last = last_state
-      last_action = 0
 
-    x = np.hstack(([1], last_state[:2], state_before_last[1], last_state[2], state_before_last[2], action, last_action))
+    # Transition to next state
+    x = np.concatenate(([1], self.current_state, self.last_state, self.last_action, action))
     glucose = np.dot(x, Glucose.COEF) + np.random.normal(0, Glucose.SIGMA_NOISE)
     food, activity = self.generate_food_and_activity()
-    s3 = self.S[-1][0]
-    s4 = s5 = s6 = self.S[-1][1]
-    s7 = self.S[-1][2]
 
-    s_prev = self.S[-1]
-    s_next = np.array([glucose, food, activity, s3, s4, s5, s6, s7])
-    reward = self.reward_function(s_prev, s_next)
-    return s_next, reward
+    # Update current and last state and action info
+    self.last_state = copy.copy(self.current_state)
+    self.current_state = np.array([glucose, food, activity])
+    self.last_action = action
+
+    reward = self.reward_function(self.last_state, self.current_state)
+    return x, reward
+
+  @staticmethod
+  def get_state_at_action(action, x):
+    """
+    Replace current action entry in x with action.
+    :param action:
+    :param x:
+    :return:
+    """
+    new_x = copy.copy(x)
+    nex_x[-2] = action
+    return new_x
 
   def get_state_history_as_array(self):
     """
     Return past states as an array with blocks [ lag 1 states, states]
     :return:
     """
-    return np.column_stack((np.vstack(self.S[:-2]), np.vstack(self.S[1:-1])))
+    return np.vstack(self.X)
 
   def step(self, action):
     self.t += 1
     done = self.t == self.horizon
-    s_next, reward = self.next_state_and_reward(action)
-    self.S.append(s_next)
+    x, reward = self.next_state_and_reward(action)
+    self.X.append(x)
     self.R.append(reward)
     self.A.append(action)
-    return done
+    return x, reward, done
 
 
