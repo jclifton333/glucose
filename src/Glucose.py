@@ -103,6 +103,13 @@ class Glucose(object):
     reward = self.reward_function(s_prev, s_next)
     return s_next, reward
 
+  def get_state_history_as_array(self):
+    """
+    Return past states as an array with blocks [ lag 1 states, states]
+    :return:
+    """
+    return np.column_stack((np.vstack(self.S[:-2]), np.vstack(self.S[1:-1])))
+
   def step(self, action):
     self.t += 1
     done = self.t == self.horizon
