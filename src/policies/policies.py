@@ -88,7 +88,8 @@ def expected_q_max(q_fn, X, env, transition_model, num_draws=10):
   return expected_q_max_
 
 
-# ToDO: This and fitted_q don't need to be different functions
+# ToDo: This and fitted_q don't need to be different functions
+# ToDo: Options for different weightings of observed and simulated td errors.
 def model_enriched_fitted_q(env, gamma, q_regressor, transition_model_fitter, number_of_value_iterations):
   """
   Fitted Q iteration, with observed data supplemented by expectations from estimated transition model.
