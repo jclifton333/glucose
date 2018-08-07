@@ -85,6 +85,9 @@ class TransitionDensityEstimator(object):
     self.model_is_fit = False
     self.output_dimension = None
 
+  def conditional_expectation(self, x):
+    assert self.model_is_fit
+
   def fit(self, X, Y):
     self.model_is_fit = True
     self.output_dimension = Y.shape[1]
@@ -135,6 +138,9 @@ class MDR(TransitionDensityEstimator):
     self.output_dimension = Y.shape[1]
     self.model_is_fit = True
 
+  def conditional_expectation(self, x):
+    raise NotImplementedError
+
   def simulate_from_fit_model(self, x):
     super(MDR, self).simulate_from_fit_model(x)
     theta_dot_x = np.dot(self.theta_array, x)
@@ -161,16 +167,25 @@ class MultivariateLinear(TransitionDensityEstimator):
     n, p = X.shape
     self.sigma_hat = np.cov(errors_array) / (n - p)
 
-
   def fit(self, X, Y):
     super(MultivariateLinear, self).fit(X, Y)
     self.fitter.fit(X, Y)
+
+  def conditional_expectation(self, x):
+    super(MultivariateLinear, self).conditional_expectation(x)
+    return self.fitter.predict(x)
+
+  def conditional_expectation_at_block(self, X):
+    return np.array([self.conditional_expectation(x) for x in X])
 
   def simulate_from_fit_model(self, x):
     super(MultivariateLinear, self).simulate_from_fit_model(x)
     mean = self.fitter.predict(x)
     y_simulated = np.random.multivariate_normal(mean, cov=self.sigma_hat)
     return y_simulated
+
+  def simulate_from_fit_model_at_block(self, X):
+    return np.array([self.simulate_from_fit_model(x) for x in X])
 
 
 
