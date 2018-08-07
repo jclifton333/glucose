@@ -12,6 +12,11 @@ q: target dimension
 import numpy as np
 from scipy.special import expit
 from scipy.optimize import minimize
+from abc import ABCMeta, abstractmethod
+from sklearn.linear_model import LinearRegression
+
+# Create ABC base class compatible with Python 2.7 and 3.x
+ABC = ABCMeta('ABC', (object, ), {'__slots__': ()})
 
 
 def expit_linear_probability(theta_dot_x):
@@ -25,6 +30,7 @@ def linear_multivariate_normal_density(sigma, beta_dot_x, y):
   return term_in_exponent * normalizing_constant
 
 
+# ToDo: Mixing coefficients need to sum to 1; likelihood is incorrect as is
 def log_likelihood_at_one_data_point(sigma_vec, theta_dot_x, beta_dot_x, y):
   """
 
@@ -78,33 +84,18 @@ def mixture_density_regression(X, Y, number_of_mixture_components):
   return get_mdr_parameters_from_2d_array(res.x, number_of_mixture_components, p, q)
 
 
-class MDR(object):
-
-  def __init__(self, number_of_mixture_components=3)
-    self.number_of_mixture_components = number_of_mixture_components
+class TransitionDensityEstimator(ABC):
+  def __init__(self):
     self.model_is_fit = False
-    self.sigma_vec = None
-    self.theta_array = None
-    self.beta_array = None
     self.output_dimension = None
 
   def fit(self, X, Y):
-    res = mixture_density_regression(X, Y, self.number_of_mixture_components)
-    self.sigma_vec = res['sigma_vec']
-    self.theta_array = res['theta_array']
-    self.beta_array = res['beta_array']
-    self.output_dimension = Y.shape[1]
     self.model_is_fit = True
+    self.output_dimension = Y.shape[1]
 
-  def simulate_from_fitted_model(self, x):
-    theta_dot_x = np.dot(self.theta_array, x)
-    mixture_component_probabilities = [expit_linear_probability(theta_dot_x_m) for theta_dot_x_m in theta_dot_x]
-    randomly_chosen_mixture_component = np.random.multinomial(1, pvals=mixture_component_probabilities)
-    beta_at_mixture_component = self.beta_array[randomly_chosen_mixture_component, :]
-    sigma_at_mixture_component = self.sigma_vec[randomly_chosen_mixture_component]
-    y_simulated = np.random.multivariate_normal(np.dot(beta_at_mixture_component, x),
-                                                sigma_at_mixture_component*np.eye(self.output_dimension))
-    return y_simulated
+  @abstractmethod
+  def simulate_from_fit_model(self, x):
+    pass
 
   def roll_out_glucose_policy(self, initial_x, policy, rollout_depth):
     """
@@ -131,6 +122,46 @@ class MDR(object):
       X = np.vstack((X, x))
     return X
 
+
+class MDR(TransitionDensityEstimator):
+  def __init__(self, number_of_mixture_components=3)
+    TransitionDensityEstimator.__init__(self)
+    self.number_of_mixture_components = number_of_mixture_components
+    self.sigma_vec = None
+    self.theta_array = None
+    self.beta_array = None
+
+  def fit(self, X, Y):
+    super(MDR, self).fit(X, Y)
+    res = mixture_density_regression(X, Y, self.number_of_mixture_components)
+    self.sigma_vec = res['sigma_vec']
+    self.theta_array = res['theta_array']
+    self.beta_array = res['beta_array']
+    self.output_dimension = Y.shape[1]
+    self.model_is_fit = True
+
+  def simulate_from_fit_model(self, x):
+    theta_dot_x = np.dot(self.theta_array, x)
+    mixture_component_probabilities = [expit_linear_probability(theta_dot_x_m) for theta_dot_x_m in theta_dot_x]
+    randomly_chosen_mixture_component = np.random.multinomial(1, pvals=mixture_component_probabilities)
+    beta_at_mixture_component = self.beta_array[randomly_chosen_mixture_component, :]
+    sigma_at_mixture_component = self.sigma_vec[randomly_chosen_mixture_component]
+    y_simulated = np.random.multivariate_normal(np.dot(beta_at_mixture_component, x),
+                                                sigma_at_mixture_component*np.eye(self.output_dimension))
+    return y_simulated
+
+
+class MultivariateLinear(TransitionDensityEstimator):
+  def __init__(self):
+    TransitionDensityEstimator.__init__(self)
+    self.fitter = LinearRegression()
+
+  def fit(self, X, Y):
+    super(MultivariateLinear, self).fit(X, Y)
+    self.fitter.fit(X, Y)
+
+  def simulate_from_fit_model(self, x):
+    pass
 
 
 

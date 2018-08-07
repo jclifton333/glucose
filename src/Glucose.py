@@ -76,7 +76,7 @@ class Glucose(object):
     x = np.array([1, glucose, food, activity, glucose, food, activity])
     self.current_state = self.last_state = np.array([glucose, food, activity])
     self.last_action = 0
-    self.t += 1
+    self.t = -1
     self.X.append(x)
     return
 
@@ -109,7 +109,7 @@ class Glucose(object):
     :return:
     """
     new_x = copy.copy(x)
-    nex_x[-2] = action
+    new_x[-2] = action
     return new_x
 
   def get_state_history_as_array(self):
