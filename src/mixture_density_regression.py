@@ -14,8 +14,8 @@ from scipy.special import expit
 from scipy.optimize import minimize
 
 
-def expit_linear_probability(beta_dot_x):
-  return expit(beta_dot_x)
+def expit_linear_probability(theta_dot_x):
+  return expit(theta_dot_x)
 
 
 def linear_multivariate_normal_density(sigma, beta_dot_x, y):
@@ -76,4 +76,61 @@ def mixture_density_regression(X, Y, number_of_mixture_components):
   x0 = np.zeros((1 + p*q + p, m))
   res = minimize(negative_log_likelihood, x0=x0, method='L-BFGS-B')
   return get_mdr_parameters_from_2d_array(res.x, number_of_mixture_components, p, q)
+
+
+class MDR(object):
+
+  def __init__(self, number_of_mixture_components=3)
+    self.number_of_mixture_components = number_of_mixture_components
+    self.model_is_fit = False
+    self.sigma_vec = None
+    self.theta_array = None
+    self.beta_array = None
+    self.output_dimension = None
+
+  def fit(self, X, Y):
+    res = mixture_density_regression(X, Y, self.number_of_mixture_components)
+    self.sigma_vec = res['sigma_vec']
+    self.theta_array = res['theta_array']
+    self.beta_array = res['beta_array']
+    self.output_dimension = Y.shape[1]
+    self.model_is_fit = True
+
+  def simulate_from_fitted_model(self, x):
+    theta_dot_x = np.dot(self.theta_array, x)
+    mixture_component_probabilities = [expit_linear_probability(theta_dot_x_m) for theta_dot_x_m in theta_dot_x]
+    randomly_chosen_mixture_component = np.random.multinomial(1, pvals=mixture_component_probabilities)
+    beta_at_mixture_component = self.beta_array[randomly_chosen_mixture_component, :]
+    sigma_at_mixture_component = self.sigma_vec[randomly_chosen_mixture_component]
+    y_simulated = np.random.multivariate_normal(np.dot(beta_at_mixture_component, x),
+                                                sigma_at_mixture_component*np.eye(self.output_dimension))
+    return y_simulated
+
+  def roll_out_glucose_policy(self, initial_x, policy, rollout_depth):
+    """
+    Assume initial_x is a Glucose feature, and policy maps Glucose features to binary actions.  Using fitted model,
+    roll out one random trajectory from initial_x under policy.
+
+    :param initial_x:
+    :param policy:
+    :param rollout_depth:
+    :return:
+    """
+    assert self.model_is_fit
+
+    x = initial_x
+    last_action = x[-2]
+    last_state = x[:3]
+    X = np.zeros((0, 9))  # For collecting observations
+    for t in range(rollout_depth):
+      next_state = self.simulate_from_fitted_model(x)
+      next_and_last_state = np.concatenate((next_state, last_state, last_action))
+      action = policy(next_and_last_state)
+      x = np.concatenate((next_and_last_state, action))
+      last_action = action
+      X = np.vstack((X, x))
+    return X
+
+
+
 
