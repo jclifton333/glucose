@@ -40,22 +40,14 @@ def model_based(env, transition_model_fitter):
   """
   # Fit transition model
   transition_model = transition_model_fitter()
-  X = env.get_state_history_as_array()
-  X_next = np.vstack(env.S[2:])
-  transition_model.fit(X, X_next)
+  X, Sp1 = env.get_state_transitions_as_x_y_pair()
+  transition_model.fit(X, Sp1)
 
   # Simulation optimization
   return
 
 
 def fitted_q(env, gamma, regressor, number_of_value_iterations):
-  """
-
-  :param env:
-  :param regressor:
-  :param number_of_value_iterations:
-  :return:
-  """
   X = env.get_state_history_as_array()
   target = np.hstack(env.R)
   # Fit one-step q fn

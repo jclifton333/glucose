@@ -12,11 +12,7 @@ q: target dimension
 import numpy as np
 from scipy.special import expit
 from scipy.optimize import minimize
-from abc import ABCMeta, abstractmethod
 from sklearn.linear_model import LinearRegression
-
-# Create ABC base class compatible with Python 2.7 and 3.x
-ABC = ABCMeta('ABC', (object, ), {'__slots__': ()})
 
 
 def expit_linear_probability(theta_dot_x):
@@ -84,7 +80,7 @@ def mixture_density_regression(X, Y, number_of_mixture_components):
   return get_mdr_parameters_from_2d_array(res.x, number_of_mixture_components, p, q)
 
 
-class TransitionDensityEstimator(ABC):
+class TransitionDensityEstimator(object):
   def __init__(self):
     self.model_is_fit = False
     self.output_dimension = None
@@ -93,9 +89,8 @@ class TransitionDensityEstimator(ABC):
     self.model_is_fit = True
     self.output_dimension = Y.shape[1]
 
-  @abstractmethod
   def simulate_from_fit_model(self, x):
-    pass
+    assert self.model_is_fit
 
   def roll_out_glucose_policy(self, initial_x, policy, rollout_depth):
     """
@@ -141,6 +136,7 @@ class MDR(TransitionDensityEstimator):
     self.model_is_fit = True
 
   def simulate_from_fit_model(self, x):
+    super(MDR, self).simulate_from_fit_model(x)
     theta_dot_x = np.dot(self.theta_array, x)
     mixture_component_probabilities = [expit_linear_probability(theta_dot_x_m) for theta_dot_x_m in theta_dot_x]
     randomly_chosen_mixture_component = np.random.multinomial(1, pvals=mixture_component_probabilities)
@@ -155,13 +151,27 @@ class MultivariateLinear(TransitionDensityEstimator):
   def __init__(self):
     TransitionDensityEstimator.__init__(self)
     self.fitter = LinearRegression()
+    self.sigma_hat = None
+
+  def get_variance_estimates(self, X, Y):
+    assert self.model_is_fit
+
+    Y_hat = self.fitter.predict(X)
+    errors_array = Y_hat - Y
+    n, p = X.shape
+    self.sigma_hat = np.cov(errors_array) / (n - p)
+
 
   def fit(self, X, Y):
     super(MultivariateLinear, self).fit(X, Y)
     self.fitter.fit(X, Y)
 
   def simulate_from_fit_model(self, x):
-    pass
+    super(MultivariateLinear, self).simulate_from_fit_model(x)
+    mean = self.fitter.predict(x)
+    y_simulated = np.random.multivariate_normal(mean, cov=self.sigma_hat)
+    return y_simulated
+
 
 
 

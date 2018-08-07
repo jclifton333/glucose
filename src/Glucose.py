@@ -31,6 +31,7 @@ class Glucose(object):
     self.R = []  # List of rewards at each time step
     self.A = []  # List of actions at each time step
     self.X = []  # List of features (previous and current states) at each time step
+    self.S = []
     self.t = -1
     self.horizon = horizon
     self.current_state = self.last_state = self.last_action = None
@@ -78,6 +79,7 @@ class Glucose(object):
     self.last_action = 0
     self.t = -1
     self.X.append(x)
+    self.S.append(current_state)
     return
 
   def next_state_and_reward(self, action):
@@ -119,6 +121,15 @@ class Glucose(object):
     """
     return np.vstack(self.X)
 
+  def get_state_transitions_as_x_y_pair(self):
+    """
+    For estimating transition density.
+    :return:
+    """
+    X = np.vstack(self.X[:-1])
+    Sp1 = np.vstack(self.S[1:])
+    return X, Sp1
+
   def step(self, action):
     self.t += 1
     done = self.t == self.horizon
@@ -126,6 +137,7 @@ class Glucose(object):
     self.X.append(x)
     self.R.append(reward)
     self.A.append(action)
+    self.S.append(current_state)
     return x, reward, done
 
 
