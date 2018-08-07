@@ -1,3 +1,4 @@
+import pdb
 import numpy as np
 import copy
 
@@ -48,7 +49,7 @@ class Glucose(object):
     last_glucose = s_prev[0]
 
     # Reward from this timestep
-    r_1 = (new_glucose < 70) * (-0.005 * new_glucose**2 + 0.95 * new_glucose - 45) + \
+    r1 = (new_glucose < 70) * (-0.005 * new_glucose**2 + 0.95 * new_glucose - 45) + \
           (new_glucose >= 70) * (-0.00017 * new_glucose**2 + 0.02167 * new_glucose - 0.5)
 
     # Reward from previous timestep
@@ -74,12 +75,13 @@ class Glucose(object):
     """
     food, activity = self.generate_food_and_activity()
     glucose = np.random.normal(Glucose.MU_GLUCOSE, Glucose.SIGMA_GLUCOSE)
-    x = np.array([1, glucose, food, activity, glucose, food, activity])
+    x = np.array([1, glucose, food, activity, glucose, food, activity, 0, 0])
     self.current_state = self.last_state = np.array([glucose, food, activity])
     self.last_action = 0
     self.t = -1
     self.X.append(x)
-    self.S.append(current_state)
+    self.S.append(self.current_state)
+    self.step(0)
     return
 
   def next_state_and_reward(self, action):
@@ -90,7 +92,7 @@ class Glucose(object):
     """
 
     # Transition to next state
-    x = np.concatenate(([1], self.current_state, self.last_state, self.last_action, action))
+    x = np.concatenate(([1], self.current_state, self.last_state, [self.last_action], [action]))
     glucose = np.dot(x, Glucose.COEF) + np.random.normal(0, Glucose.SIGMA_NOISE)
     food, activity = self.generate_food_and_activity()
 
@@ -119,7 +121,8 @@ class Glucose(object):
     Return past states as an array with blocks [ lag 1 states, states]
     :return:
     """
-    return np.vstack(self.X)
+    X_as_array = np.vstack(self.X)
+    return X_as_array
 
   def get_state_transitions_as_x_y_pair(self):
     """
@@ -137,7 +140,7 @@ class Glucose(object):
     self.X.append(x)
     self.R.append(reward)
     self.A.append(action)
-    self.S.append(current_state)
+    self.S.append(self.current_state)
     return x, reward, done
 
 

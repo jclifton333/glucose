@@ -10,8 +10,8 @@ def maximize_q_function_at_x(q_fn, x, env):
   :return:
   """
   x0, x1 = env.get_state_at_action(0, x), env.get_state_at_action(1, x)
-  q0, q1 = q_fn(x0), q_fn(x1)
-  return np.max([q0, q1]), np.armgax([q0, q1])
+  q0, q1 = q_fn(x0.reshape(1, -1)), q_fn(x1.reshape(1, -1))
+  return np.max([q0, q1]), np.argmax([q0, q1])
 
 
 def maximize_q_function_at_block(q_fn, X, env):
@@ -57,12 +57,12 @@ def fitted_q(env, gamma, regressor, number_of_value_iterations):
 
   # Fit longer-horizon q fns
   for k in range(number_of_value_iterations):
-    q_max_array, _ = maximize_q_function_at_block(reg, Xp1, env)
-    target += gamma * q_max
+    q_max_array, _ = maximize_q_function_at_block(reg.predict, Xp1, env)
+    target += gamma * q_max_array
     reg.fit(X, target)
 
   # Maximize final q iterate to get next action
-  _, list_of_optimal_actions = maximize_q_function_at_block(reg, X, env)
+  _, list_of_optimal_actions = maximize_q_function_at_block(reg.predict, X, env)
 
   # Last entry of list gives optimal action at current state
   optimal_action = list_of_optimal_actions[-1]
