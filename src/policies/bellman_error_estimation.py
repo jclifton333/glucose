@@ -5,6 +5,7 @@ Refer to model based and model free BE estimators as delta_mb, delta_mf, respect
 
 To get (estimated) MSE-optimal convex combination, we need to estimate
   - sampling variance of delta_mb and delta_mf
+  - bias of delta_mb
   - sampling correlation of delta_mb and delta_mf
   - signal-to-noise ratios of resp sampling dbns
 (refer to formula in http://interstat.statjournals.net/YEAR/2001/articles/0103002.pdf)
@@ -102,42 +103,129 @@ def estimate_combination_weights(delta_mf, q_fn, env, gamma, X, Sp1, transition_
   return alpha_mb, alpha_mf
 
 
-def bootstrap_estimate_reward_variance(R, bootstrap_weight_array):
-  n = len(R)
-  bootstrap_reward_dbn = np.zeros((0, n))
-  for multiplier in bootstrap_weight_array:
-    R_b = np.multiply(R, multiplier)
-    bootstrap_reward_dbn = np.vstack((bootstrap_reward_dbn, R_b))
-  elementwise_variances = np.variance(bootstrap_reward_dbn, axis=0)
-  return np.mean(elementwise_variances)
+def mb_backup(q_fn, env, gamma, X, transition_model):
+  expected_q_max_ = expected_q_max(q_fn, X, env, transition_model)
+  R_expected = transition_model.expected_glucose_reward_at_block(X, env)
+  return R_expected + gamma * expected_q_max_
 
 
-def bootstrap_estimate_mf_qmax_variance(env, q_fn, Xp1, bootstrap_weight_array):
-  n = Xp1.shape[0]
-  bootstrap_qmax_dbn = np.zeros((0, n))
-  for multiplier in bootstrap_weight_array:
-    Xp1_b = np.multiply(multiplier, Xp1_b)
-    q_max_b = maximize_q_function_at_block(q_fn, Xp1, env)
-    bootstrap_qmax_dbn = np.vstack((bootstrap_qmax_dbn, q_max_b))
-  elementwise_variances = np.variance(bootstrap_qmax_qbn, axis = 0)
-  return np.mean(elementwise_variances)
+def mf_backup(q_fn, env, gamma, R, Xp1):
+  q_max = maximize_q_function_at_block(q_fn, Xp1, env)
+  return R + gamma * q_max
 
 
-def bootstrap_estimate_backed_up_q_mb_bias_and_variance(env, q_fn, X, Sp1, bootstrap_weight_array):
-  pass
+def bootstrapped_mse_components(q_fn, env, gamma, transition_model, number_of_bootstrap_samples, X, Xp1, Sp1,
+                                expected_q_max, estimate_bias=False):
+  """
+
+  :param q_fn:
+  :param env:
+  :param gamma:
+  :param transition_model:
+  :param number_of_bootstrap_samples:
+  :param X:
+  :param Xp1:
+  :param Sp1:
+  :param expected_q_max:
+  :param estimate_bias: Boolean for using bootstrap to estimate the bias of the mb backup
+  :return:
+  """
+  n = X.shape[0]
+  bootstrap_mf_backup_dbn = np.zeros((0, n))
+  bootstrap_mb_backup_dbn = np.zeros((0, n))
+  for b in range(number_of_bootstrap_samples):
+    multiplier = np.random.exponential(size=n)
+    X_b, Sp1_b = np.multiply(multiplier, X_b), np.multiply(multiplier, Sp1_b)
+    Xp1_b, R_b = np.multiply(multiplier, Xp1), np.multiply(multiplier, np.hstack(env.R))
+    transition_model.fit(X_b, Sp1_b)
+    q_mb_backup_b = mb_backup(q_fn, env, gamma, X_b, transition_model)
+    q_mf_backup_b = mf_backup(q_fn, env, gamma, R_b, Xp1_b)
+    bootstrap_mf_backup_dbn = np.vstack((bootstrap_mf_backup_dbn, q_mf_backup_b))
+    bootstrap_mb_backup_dbn = np.vstack((bootstrap_mb_backup_dbn, q_mb_backup_b))
+
+  # Pooled mf variance estimate
+  mf_tuplewise_variances = np.variance(bootstrap_mf_backup_dbn, axis=0)
+  mf_variances = np.ones(n) * np.mean(mf_tuplewise_variances)
+
+  # mb variance and bias estimates
+  if estimate_bias:
+    mb_biases = expected_q_max - np.mean(bootstrap_mb_backup_dbn, axis=0)
+  else:
+    mb_biases = None
+  mb_variances = np.variance(bootstrap_mb_backup_dbn, axis=0)
+
+  # Correlation estimates
+  estimator_correlations = \
+    np.array([pearsonr(bootstrap_mb_backup_dbn[:, i], bootstrap_mf_backup_dbn[:, i])[0] for i in range(n)])
+
+  return {'mf_variances': mf_variances, 'mb_biases': mb_biases, 'mb_variances': mb_variances,
+          'correlations': estimator_correlations}
 
 
-def mse_averaged_backup_estimate(q_fn, env, gamma, X, Sp1, transition_model, number_of_bootstrap_samples=10):
+def kernel_mse_components(q_fn, env, gamma, transition_model, X, Xp1, Sp1, R, kernel):
+  n = X.shape[0]
+  q_mb_backup = mb_backup(q_fn, env, gamma, X, transition_model)
+  q_mf_backup = mf_backup(q_fn, env, gamma, R, Xp1)
+
+  mb_biases = []
+  # Compare mb backups to (kernel-smoothed) mf backups
+  for t in range(n):
+    x = X[t, :]
+    backup_at_x = q_mb_backup[t]
+    kernel_bias_estimator = 0.0
+    kernel_normalizing_constant = 0.0
+    for s in range(n):
+      x_s = X[s, :]
+      mf_backup_at_x_s = q_mf_backup[s]
+      kernel_distance = kernel(x, x_s)
+      kernel_bias_estimator += (backup_at_x - mf_backup_at_x_s) * kernel_distance
+      kernel_normalizing_constant += kernel_distance
+    mb_biases.append(kernel_bias_estimator / kernel_normalizing_constant)
+  return {'mb_biases': np.array(mb_biases)}
+
+
+def estimate_weights_from_mse_components(q_mb_backup, mb_biases, mb_variances, mf_variances, correlations):
+  # ToDo: Think about how to get preliminary estimate of q_backup
+  q_backup_hat = q_mb_backup - mb_biases
+
+  # Estimate k_mb
+  k_mb = q_mb_backup / q_backup_hat
+  k_mf = 1  # q_mf_backup is unbiased
+
+  # Estimate signal-to-noise ratios v
+  v_mf = mf_variances / q_backup_hat
+  v_mb = mb_variances / q_backup_hat
+
+  # Estimate lambda
+  lambda_ = (k_mf ** 2 * v_mb) / (k_mb ** 2 * v_mf)
+
+  # Estimate alphas
+  alpha_mf = (lambda_ * (lambda_ - correlations)) / (1 - 2 * rho * lambda_ + lambda_ ** 2 + (1 + rho ** 2) * (v_mf / k_mb))
+  alpha_mb = 1 - alpha_mf
+
+  # return {'var_delta_mf': var_delta_mf, 'var_delta_mb': var_delta_mb, 'correlation': correlation}
+  return alpha_mb, alpha_mf
+
+
+def estimate_backup_mse_components(q_fn, env, gamma, X, Sp1, transition_model, number_of_bootstrap_samples=10):
   # Get backed_up_q_mf
   X, Xp1 = X[:-1, :], X[1:, :]
   R = np.hstack(env.R)
-  q_max_array = maximize_q_function_at_block(q_fn, Xp1, env)
-  backed_up_q_mf = R + gamma * q_max_array
+  q_mf_backup = mf_backup(q_fn, env, gamma, R, Xp1)
 
   # Get backed_up_q_mb
-  expected_q_max_ = expected_q_max(q_fn, X, env, transition_model)
-  R_expected = None
-  backed_up_q_mb = R_expected + gamma * expected_q_max
+  q_mb_backup = mb_backup(q_fn, env, gamma, X, transition_model)
+
+  # Estimate combination weights
+  n = X.shape[0]
+  bootstrap_weight_array = np.random.exponential(size=(number_of_bootstrap_samples, n))
+  mb_variances, mb_biases = bootstrap_estimate_backed_up_q_mb_bias_and_variance(env, q_fn, Xp1, transition_model,
+                                                                                bootstrap_weight_array, R_expected,
+                                                                                expected_q_max)
+  mf_variance = None
+  mf_variances = np.ones(n) * mf_variance  # Using pooled estimate
+
+
 
 
 

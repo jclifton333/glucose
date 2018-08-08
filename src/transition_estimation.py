@@ -178,6 +178,12 @@ class MultivariateLinear(TransitionDensityEstimator):
   def conditional_expectation_at_block(self, X):
     return np.array([self.conditional_expectation(x) for x in X])
 
+  def expected_glucose_reward_at_block(self, X, env):
+    Sp1 = self.conditional_expectation_at_block(X)
+    n = Sp1.shape[0]
+    R = np.array([env.reward_function(X[i, 4:7], Sp1[i, :]) for i in range(n)])
+    return R
+
   def simulate_from_fit_model(self, x):
     super(MultivariateLinear, self).simulate_from_fit_model(x)
     mean = self.fitter.predict(x)
