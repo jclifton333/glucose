@@ -11,7 +11,7 @@ To get (estimated) MSE-optimal convex combination, we need to estimate
 See also https://hal.archives-ouvertes.fr/hal-00936024/file/A-general-procedure-to-combine-estimators.pdf
 """
 import numpy as np
-from policies import expected_q_max
+from policies.policies import expected_q_max, maximize_q_function_at_block
 from scipy.stats import pearsonr
 
 
@@ -53,8 +53,8 @@ def delta_mb_bias_and_variance_pooled(delta_mb, q_fn, env, gamma, X, Sp1, transi
   return np.mean(elementwise_variances), bootstrapped_deltas, delta_mb - elementwise_means
 
 
-def estimate_variances_and_correlations(delta_mf, q_fn, env, gamma, X, Sp1, transition_model_fitter,
-                                        alpha_mf_prev, number_of_bootstrap_samples=10):
+def estimate_combination_weights(delta_mf, q_fn, env, gamma, X, Sp1, transition_model_fitter, alpha_mf_prev,
+                                 number_of_bootstrap_samples=10):
   """
 
   :param delta_mf:
@@ -100,6 +100,44 @@ def estimate_variances_and_correlations(delta_mf, q_fn, env, gamma, X, Sp1, tran
 
   # return {'var_delta_mf': var_delta_mf, 'var_delta_mb': var_delta_mb, 'correlation': correlation}
   return alpha_mb, alpha_mf
+
+
+def bootstrap_estimate_reward_variance(R, bootstrap_weight_array):
+  n = len(R)
+  bootstrap_reward_dbn = np.zeros((0, n))
+  for multiplier in bootstrap_weight_array:
+    R_b = np.multiply(R, multiplier)
+    bootstrap_reward_dbn = np.vstack((bootstrap_reward_dbn, R_b))
+  elementwise_variances = np.variance(bootstrap_reward_dbn, axis=0)
+  return np.mean(elementwise_variances)
+
+
+def bootstrap_estimate_mf_qmax_variance(env, q_fn, Xp1, bootstrap_weight_array):
+  n = Xp1.shape[0]
+  bootstrap_qmax_dbn = np.zeros((0, n))
+  for multiplier in bootstrap_weight_array:
+    Xp1_b = np.multiply(multiplier, Xp1_b)
+    q_max_b = maximize_q_function_at_block(q_fn, Xp1, env)
+    bootstrap_qmax_dbn = np.vstack((bootstrap_qmax_dbn, q_max_b))
+  elementwise_variances = np.variance(bootstrap_qmax_qbn, axis = 0)
+  return np.mean(elementwise_variances)
+
+
+def bootstrap_estimate_backed_up_q_mb_bias_and_variance(env, q_fn, X, Sp1, bootstrap_weight_array):
+  pass
+
+
+def mse_averaged_backup_estimate(q_fn, env, gamma, X, Sp1, transition_model, number_of_bootstrap_samples=10):
+  # Get backed_up_q_mf
+  X, Xp1 = X[:-1, :], X[1:, :]
+  R = np.hstack(env.R)
+  q_max_array = maximize_q_function_at_block(q_fn, Xp1, env)
+  backed_up_q_mf = R + gamma * q_max_array
+
+  # Get backed_up_q_mb
+  expected_q_max_ = expected_q_max(q_fn, X, env, transition_model)
+  R_expected = None
+  backed_up_q_mb = R_expected + gamma * expected_q_max
 
 
 
