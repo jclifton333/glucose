@@ -14,6 +14,7 @@ See also https://hal.archives-ouvertes.fr/hal-00936024/file/A-general-procedure-
 import numpy as np
 from policies.policies import expected_q_max, maximize_q_function_at_block
 from scipy.stats import pearsonr
+from sklearn.metrics.pairwise import pairwise_kernels, rbf_kernel
 
 
 def delta_mf_variance_pooled(delta_mf, bootstrap_weight_array):
@@ -113,9 +114,36 @@ def mf_backup(q_fn, env, gamma, R, Xp1):
   q_max = maximize_q_function_at_block(q_fn, Xp1, env)
   return R + gamma * q_max
 
+def kernel_matrix(X, kernel):
+  """
+  P
+  :param X:
+  :param kernel:
+  :return:
+  """
 
-def bootstrapped_mse_components(q_fn, env, gamma, transition_model, number_of_bootstrap_samples, X, Xp1, Sp1,
-                                expected_q_max, estimate_bias=False):
+
+def kernel_smooth_observation(observations_to_average, center, features, kernel):
+  """
+  Get a smoothed estimate of the observation at center as
+  \sum obs * kernel(center, feature_at_obs)
+
+  :param observations_to_average:
+  :param center:
+  :param features:
+  :param kernel:
+  :return:
+  """
+  kernel_estimate = normalizing_constant = 0.0
+  for observation, feature in zip(observations_to_average, features):
+    weight = kernel(center, feature)
+    kernel_estimate += observation * weight
+    normalizing_constant += weight
+  return kernel_estimate / normalizing_constant
+
+
+def bootstrapped_kernel_mse_components(q_fn, q_mf_backup, env, gamma, transition_model, number_of_bootstrap_samples, X,
+                                       Xp1, Sp1, expected_q_max, kernel, estimate_bias=False):
   """
 
   :param q_fn:
@@ -127,13 +155,24 @@ def bootstrapped_mse_components(q_fn, env, gamma, transition_model, number_of_bo
   :param Xp1:
   :param Sp1:
   :param expected_q_max:
+  :param kernel:
   :param estimate_bias: Boolean for using bootstrap to estimate the bias of the mb backup
   :return:
   """
   n = X.shape[0]
   bootstrap_mf_backup_dbn = np.zeros((0, n))
   bootstrap_mb_backup_dbn = np.zeros((0, n))
+
+  pairwise_kernels_ = pairwise_kernels(X)
+  kernel_sums = np.sum(pairwise_kernels, axis=1)
+  pairwise_kernels_ = np.dot(np.diag(1 / kernel_sums), pairwise_kernels_)  # Weight kernels by normalizing constants
+
+  mf_variances = np.zeros(n)
+  mb_variances = np.zeros(n)
+  covariances = np.zeros(n)
+
   for b in range(number_of_bootstrap_samples):
+    # Compute backups
     multiplier = np.random.exponential(size=n)
     X_b, Sp1_b = np.multiply(multiplier, X_b), np.multiply(multiplier, Sp1_b)
     Xp1_b, R_b = np.multiply(multiplier, Xp1), np.multiply(multiplier, np.hstack(env.R))
@@ -143,26 +182,25 @@ def bootstrapped_mse_components(q_fn, env, gamma, transition_model, number_of_bo
     bootstrap_mf_backup_dbn = np.vstack((bootstrap_mf_backup_dbn, q_mf_backup_b))
     bootstrap_mb_backup_dbn = np.vstack((bootstrap_mb_backup_dbn, q_mb_backup_b))
 
-  # Pooled mf variance estimate
-  mf_tuplewise_variances = np.variance(bootstrap_mf_backup_dbn, axis=0)
-  mf_variances = np.ones(n) * np.mean(mf_tuplewise_variances)
+    # Update variance_estimates
+    mf_squared_error_b = (q_mf_backup_b - q_mf_backup)**2
+    mf_squared_error_b_kernelized = np.dot(pairwise_kernels_, mf_squared_error_b)
+    mf_variances += mf_squared_error_b_kernelized / number_of_bootstrap_samples
+    mb_squared_error_b = (q_mb_backup_b - q_mb_backup)**2
+    mb_squared_error_b_kernelized = np.dot(pairwise_kernels_, mb_squared_error_b)
+    mb_variances += mb_squared_error_b_kernelized / number_of_bootstrap_samples
 
-  # mb variance and bias estimates
-  if estimate_bias:
-    mb_biases = expected_q_max - np.mean(bootstrap_mb_backup_dbn, axis=0)
-  else:
-    mb_biases = None
-  mb_variances = np.variance(bootstrap_mb_backup_dbn, axis=0)
+    # Update covariance estimates
+    covariances_b = np.multiply(q_mf_backup_b - q_mf_backup, q_mb_backup_b - q_mb_backup)
+    covariances_b_kernelized = np.dot(pairwise_kernels_, covariances_b)
+    covariances += covariances_b_kernelized
 
-  # Correlation estimates
-  estimator_correlations = \
-    np.array([pearsonr(bootstrap_mb_backup_dbn[:, i], bootstrap_mf_backup_dbn[:, i])[0] for i in range(n)])
-
+  correlations = covariances / np.sqrt(np.multiply(mb_variances, mf_variances))
   return {'mf_variances': mf_variances, 'mb_biases': mb_biases, 'mb_variances': mb_variances,
-          'correlations': estimator_correlations}
+          'correlations': correlations}
 
 
-def kernel_mse_components(q_fn, env, gamma, transition_model, X, Xp1, Sp1, R, kernel):
+def kernel_bias_estimator(q_fn, env, gamma, transition_model, X, Xp1, R, kernel):
   n = X.shape[0]
   q_mb_backup = mb_backup(q_fn, env, gamma, X, transition_model)
   q_mf_backup = mf_backup(q_fn, env, gamma, R, Xp1)
@@ -172,15 +210,15 @@ def kernel_mse_components(q_fn, env, gamma, transition_model, X, Xp1, Sp1, R, ke
   for t in range(n):
     x = X[t, :]
     backup_at_x = q_mb_backup[t]
-    kernel_bias_estimator = 0.0
+    kernel_bias_estimator_ = 0.0
     kernel_normalizing_constant = 0.0
     for s in range(n):
       x_s = X[s, :]
       mf_backup_at_x_s = q_mf_backup[s]
       kernel_distance = kernel(x, x_s)
-      kernel_bias_estimator += (backup_at_x - mf_backup_at_x_s) * kernel_distance
+      kernel_bias_estimator_ += (backup_at_x - mf_backup_at_x_s) * kernel_distance
       kernel_normalizing_constant += kernel_distance
-    mb_biases.append(kernel_bias_estimator / kernel_normalizing_constant)
+    mb_biases.append(kernel_bias_estimator_ / kernel_normalizing_constant)
   return {'mb_biases': np.array(mb_biases)}
 
 
@@ -200,14 +238,31 @@ def estimate_weights_from_mse_components(q_mb_backup, mb_biases, mb_variances, m
   lambda_ = (k_mf ** 2 * v_mb) / (k_mb ** 2 * v_mf)
 
   # Estimate alphas
-  alpha_mf = (lambda_ * (lambda_ - correlations)) / (1 - 2 * rho * lambda_ + lambda_ ** 2 + (1 + rho ** 2) * (v_mf / k_mb))
+  alpha_mf = \
+    (lambda_ * (lambda_ - correlations)) / (1 - 2 * correlations * lambda_ + lambda_ ** 2 + (1 + correlations ** 2) * (v_mf / k_mb))
   alpha_mb = 1 - alpha_mf
 
   # return {'var_delta_mf': var_delta_mf, 'var_delta_mb': var_delta_mb, 'correlation': correlation}
   return alpha_mb, alpha_mf
 
 
-def estimate_backup_mse_components(q_fn, env, gamma, X, Sp1, transition_model, number_of_bootstrap_samples=10):
+def model_smoothed_backup(q_fn, env, gamma, X, Sp1, transition_model, kernel=rbf_kernel,
+                          number_of_bootstrap_samples=100):
+  """
+  Estimate Bellman backup of q_fn by taking estimated MSE-optimal combination of model-free and model-based backups.
+
+  :param q_fn:
+  :param env:
+  :param gamma:
+  :param X:
+  :param Sp1:
+  :param transition_model:
+  :param kernel: Function that takes two arrays and returns kernel distance, e.g.
+                 sklearn.metrics.pairwise.rbf_kernel
+  :param number_of_bootstrap_samples: Bootstrapping is used to estimate MSE-minimizing weights.
+  :return:
+  """
+
   # Get backed_up_q_mf
   X, Xp1 = X[:-1, :], X[1:, :]
   R = np.hstack(env.R)
@@ -216,16 +271,15 @@ def estimate_backup_mse_components(q_fn, env, gamma, X, Sp1, transition_model, n
   # Get backed_up_q_mb
   q_mb_backup = mb_backup(q_fn, env, gamma, X, transition_model)
 
-  # Estimate combination weights
-  n = X.shape[0]
-  bootstrap_weight_array = np.random.exponential(size=(number_of_bootstrap_samples, n))
-  mb_variances, mb_biases = bootstrap_estimate_backed_up_q_mb_bias_and_variance(env, q_fn, Xp1, transition_model,
-                                                                                bootstrap_weight_array, R_expected,
-                                                                                expected_q_max)
-  mf_variance = None
-  mf_variances = np.ones(n) * mf_variance  # Using pooled estimate
+  # Get components needed to estimate alphas
+  bootstrapped_mse_components_ = bootstrapped_mse_components(q_fn, env, gamma, transition_model,
+                                                             number_of_bootstrap_samples, X, Xp1, Sp1, expected_q_max)
+  mb_biases_ = kernel_bias_estimator(q_fn, env, gamma, transition_model, X, Xp1, R, kernel)
 
+  alpha_mb, alpha_mf = \
+    estimate_weights_from_mse_components(q_mb_backup, mb_biases_,
+                                         bootstrapped_mse_components_['mb_variances'],
+                                         bootstrapped_mse_components_['mf_variances'],
+                                         bootstrapped_mse_components_['correlations'])
 
-
-
-
+  return alpha_mb*q_mb_backup + alpha_mf*q_mf_backup
