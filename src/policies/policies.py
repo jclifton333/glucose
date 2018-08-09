@@ -48,7 +48,7 @@ def maximize_q_function_at_block(q_fn, X, env):
 #   return
 
 
-def fitted_q(env, gamma, regressor, number_of_value_iterations, transition_model=None, model_smoothed_backup_=False):
+def fitted_q(env, gamma, regressor, number_of_value_iterations):
   X = env.get_state_history_as_array()
   X, Xp1 = X[:-1, :], X[1:, :]
   target = np.hstack(env.R)
@@ -63,6 +63,29 @@ def fitted_q(env, gamma, regressor, number_of_value_iterations, transition_model
     else:
       backup, _ = maximize_q_function_at_block(reg.predict, Xp1, env)
     target += gamma * backup
+    reg.fit(X, target)
+
+  # Maximize final q iterate to get next action
+  _, list_of_optimal_actions = maximize_q_function_at_block(reg.predict, X, env)
+
+  # Last entry of list gives optimal action at current state
+  optimal_action = list_of_optimal_actions[-1]
+  return optimal_action
+
+
+def model_smoothed_fitted_q(env, gamma, regressor, number_of_value_iterations, transition_model_fitter):
+  X = env.get_state_history_as_array()
+  X, Xp1 = X[:-1, :], X[1:, :]
+  model_smoothed_backup(q_fn, env, gamma, X, Sp1, transition_model, reward_only=True)
+
+  # Fit one-step q fn
+  reg = regressor()
+  reg.fit(X, target)
+
+  # Fit longer-horizon q fns
+  for k in range(number_of_value_iterations):
+    backup = model_smoothed_backup(q_fn, env, gamma, X, Sp1, transition_model)
+    target += backup
     reg.fit(X, target)
 
   # Maximize final q iterate to get next action

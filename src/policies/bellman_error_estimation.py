@@ -104,61 +104,28 @@ def estimate_combination_weights(delta_mf, q_fn, env, gamma, X, Sp1, transition_
   return alpha_mb, alpha_mf
 
 
-def mb_backup(q_fn, env, gamma, X, transition_model):
-  expected_q_max_ = expected_q_max(q_fn, X, env, transition_model)
+def mb_backup(q_fn, env, gamma, X, transition_model, reward_only=False):
   R_expected = transition_model.expected_glucose_reward_at_block(X, env)
-  return R_expected + gamma * expected_q_max_
+  if not reward_only:
+    expected_q_max_ = expected_q_max(q_fn, X, env, transition_model)
+    backup = R_expected + gamma * expected_q_max_
+  else:
+    backup = R_expected
+  return backup
 
 
-def mf_backup(q_fn, env, gamma, R, Xp1):
-  q_max = maximize_q_function_at_block(q_fn, Xp1, env)
-  return R + gamma * q_max
-
-def kernel_matrix(X, kernel):
-  """
-  P
-  :param X:
-  :param kernel:
-  :return:
-  """
-
-
-def kernel_smooth_observation(observations_to_average, center, features, kernel):
-  """
-  Get a smoothed estimate of the observation at center as
-  \sum obs * kernel(center, feature_at_obs)
-
-  :param observations_to_average:
-  :param center:
-  :param features:
-  :param kernel:
-  :return:
-  """
-  kernel_estimate = normalizing_constant = 0.0
-  for observation, feature in zip(observations_to_average, features):
-    weight = kernel(center, feature)
-    kernel_estimate += observation * weight
-    normalizing_constant += weight
-  return kernel_estimate / normalizing_constant
+def mf_backup(q_fn, env, gamma, Xp1, reward_only=False):
+  R = np.hstack(env.R)
+  if not reward_only
+    q_max = maximize_q_function_at_block(q_fn, Xp1, env)
+    backup = R + gamma * q_max
+  else:
+    backup = R
+  return backup
 
 
 def bootstrapped_kernel_mse_components(q_fn, q_mf_backup, env, gamma, transition_model, number_of_bootstrap_samples, X,
-                                       Xp1, Sp1, expected_q_max, kernel, estimate_bias=False):
-  """
-
-  :param q_fn:
-  :param env:
-  :param gamma:
-  :param transition_model:
-  :param number_of_bootstrap_samples:
-  :param X:
-  :param Xp1:
-  :param Sp1:
-  :param expected_q_max:
-  :param kernel:
-  :param estimate_bias: Boolean for using bootstrap to estimate the bias of the mb backup
-  :return:
-  """
+                                       Xp1, reward_only):
   n = X.shape[0]
   bootstrap_mf_backup_dbn = np.zeros((0, n))
   bootstrap_mb_backup_dbn = np.zeros((0, n))
@@ -177,8 +144,8 @@ def bootstrapped_kernel_mse_components(q_fn, q_mf_backup, env, gamma, transition
     X_b, Sp1_b = np.multiply(multiplier, X_b), np.multiply(multiplier, Sp1_b)
     Xp1_b, R_b = np.multiply(multiplier, Xp1), np.multiply(multiplier, np.hstack(env.R))
     transition_model.fit(X_b, Sp1_b)
-    q_mb_backup_b = mb_backup(q_fn, env, gamma, X_b, transition_model)
-    q_mf_backup_b = mf_backup(q_fn, env, gamma, R_b, Xp1_b)
+    q_mb_backup_b = mb_backup(q_fn, env, gamma, X_b, transition_model, reward_only=reward_only)
+    q_mf_backup_b = mf_backup(q_fn, env, gamma, Xp1_b, reward_only=reward_only)
     bootstrap_mf_backup_dbn = np.vstack((bootstrap_mf_backup_dbn, q_mf_backup_b))
     bootstrap_mb_backup_dbn = np.vstack((bootstrap_mb_backup_dbn, q_mb_backup_b))
 
@@ -226,7 +193,7 @@ def estimate_weights_from_mse_components(q_mb_backup, mb_biases, mb_variances, m
   # ToDo: Think about how to get preliminary estimate of q_backup
   q_backup_hat = q_mb_backup - mb_biases
 
-  # Estimate k_mb
+  # Estimate bias coefficients k
   k_mb = q_mb_backup / q_backup_hat
   k_mf = 1  # q_mf_backup is unbiased
 
@@ -242,11 +209,10 @@ def estimate_weights_from_mse_components(q_mb_backup, mb_biases, mb_variances, m
     (lambda_ * (lambda_ - correlations)) / (1 - 2 * correlations * lambda_ + lambda_ ** 2 + (1 + correlations ** 2) * (v_mf / k_mb))
   alpha_mb = 1 - alpha_mf
 
-  # return {'var_delta_mf': var_delta_mf, 'var_delta_mb': var_delta_mb, 'correlation': correlation}
   return alpha_mb, alpha_mf
 
 
-def model_smoothed_backup(q_fn, env, gamma, X, Sp1, transition_model, kernel=rbf_kernel,
+def model_smoothed_backup(q_fn, env, gamma, X, Sp1, transition_model, kernel=rbf_kernel, reward_only=False,
                           number_of_bootstrap_samples=100):
   """
   Estimate Bellman backup of q_fn by taking estimated MSE-optimal combination of model-free and model-based backups.
@@ -259,21 +225,21 @@ def model_smoothed_backup(q_fn, env, gamma, X, Sp1, transition_model, kernel=rbf
   :param transition_model:
   :param kernel: Function that takes two arrays and returns kernel distance, e.g.
                  sklearn.metrics.pairwise.rbf_kernel
+  :param reward_only: bool for only returning estimate of E[R] instead of E[R + \gamma max Q]
   :param number_of_bootstrap_samples: Bootstrapping is used to estimate MSE-minimizing weights.
   :return:
   """
 
   # Get backed_up_q_mf
   X, Xp1 = X[:-1, :], X[1:, :]
-  R = np.hstack(env.R)
-  q_mf_backup = mf_backup(q_fn, env, gamma, R, Xp1)
 
-  # Get backed_up_q_mb
-  q_mb_backup = mb_backup(q_fn, env, gamma, X, transition_model)
+  q_mf_backup = mf_backup(q_fn, env, gamma, Xp1, reward_only=reward_only)
+  q_mb_backup = mb_backup(q_fn, env, gamma, X, transition_model, reward_only=reward_only)
 
   # Get components needed to estimate alphas
-  bootstrapped_mse_components_ = bootstrapped_mse_components(q_fn, env, gamma, transition_model,
-                                                             number_of_bootstrap_samples, X, Xp1, Sp1, expected_q_max)
+  bootstrapped_mse_components_ = bootstrapped_kernel_mse_components(q_fn, env, gamma, transition_model,
+                                                                    number_of_bootstrap_samples, X, Xp1, Sp1,
+                                                                    expected_q_max, reward_only)
   mb_biases_ = kernel_bias_estimator(q_fn, env, gamma, transition_model, X, Xp1, R, kernel)
 
   alpha_mb, alpha_mf = \
