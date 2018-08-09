@@ -10,6 +10,12 @@ To get (estimated) MSE-optimal convex combination, we need to estimate
   - signal-to-noise ratios of resp sampling dbns
 (refer to formula in http://interstat.statjournals.net/YEAR/2001/articles/0103002.pdf)
 See also https://hal.archives-ouvertes.fr/hal-00936024/file/A-general-procedure-to-combine-estimators.pdf
+
+---
+
+As an alternative to combining using the kernel/bootstrap estimates of bias and variance (in order to apply the above
+method), I'm also trying just choosing alpha to minimize ( \alpha mb_backup + (1 - \alpha) mf_backup - kernel_backup)**2,
+where kernel_backup is a kde estimator of backups.
 """
 import numpy as np
 from policies.policies import expected_q_max, maximize_q_function_at_block
@@ -125,7 +131,7 @@ def mf_backup(q_fn, env, gamma, Xp1, reward_only=False):
 
 
 def bootstrapped_kernel_mse_components(q_fn, q_mf_backup, env, gamma, transition_model, number_of_bootstrap_samples, X,
-                                       Xp1, reward_only):
+                                       Xp1, Sp1, reward_only):
   n = X.shape[0]
   bootstrap_mf_backup_dbn = np.zeros((0, n))
   bootstrap_mb_backup_dbn = np.zeros((0, n))
@@ -141,7 +147,7 @@ def bootstrapped_kernel_mse_components(q_fn, q_mf_backup, env, gamma, transition
   for b in range(number_of_bootstrap_samples):
     # Compute backups
     multiplier = np.random.exponential(size=n)
-    X_b, Sp1_b = np.multiply(multiplier, X_b), np.multiply(multiplier, Sp1_b)
+    X_b, Sp1_b = np.multiply(multiplier, X_b), np.multiply(multiplier, Sp1)
     Xp1_b, R_b = np.multiply(multiplier, Xp1), np.multiply(multiplier, np.hstack(env.R))
     transition_model.fit(X_b, Sp1_b)
     q_mb_backup_b = mb_backup(q_fn, env, gamma, X_b, transition_model, reward_only=reward_only)
@@ -167,10 +173,10 @@ def bootstrapped_kernel_mse_components(q_fn, q_mf_backup, env, gamma, transition
           'correlations': correlations}
 
 
-def kernel_bias_estimator(q_fn, env, gamma, transition_model, X, Xp1, R, kernel):
+def kernel_bias_estimator(q_fn, env, gamma, transition_model, X, Xp1, R, kernel, reward_only):
   n = X.shape[0]
-  q_mb_backup = mb_backup(q_fn, env, gamma, X, transition_model)
-  q_mf_backup = mf_backup(q_fn, env, gamma, R, Xp1)
+  q_mb_backup = mb_backup(q_fn, env, gamma, X, transition_model, reward_only=reward_only)
+  q_mf_backup = mf_backup(q_fn, env, gamma, R, Xp1, reward_only=reward_only)
 
   mb_biases = []
   # Compare mb backups to (kernel-smoothed) mf backups
@@ -212,6 +218,7 @@ def estimate_weights_from_mse_components(q_mb_backup, mb_biases, mb_variances, m
   return alpha_mb, alpha_mf
 
 
+# ToDo: Split into model-smoothed reward and model-smoothed expected_q_max
 def model_smoothed_backup(q_fn, env, gamma, X, Sp1, transition_model, kernel=rbf_kernel, reward_only=False,
                           number_of_bootstrap_samples=100):
   """
@@ -239,8 +246,8 @@ def model_smoothed_backup(q_fn, env, gamma, X, Sp1, transition_model, kernel=rbf
   # Get components needed to estimate alphas
   bootstrapped_mse_components_ = bootstrapped_kernel_mse_components(q_fn, env, gamma, transition_model,
                                                                     number_of_bootstrap_samples, X, Xp1, Sp1,
-                                                                    expected_q_max, reward_only)
-  mb_biases_ = kernel_bias_estimator(q_fn, env, gamma, transition_model, X, Xp1, R, kernel)
+                                                                    reward_only)
+  mb_biases_ = kernel_bias_estimator(q_fn, env, gamma, transition_model, X, Xp1, R, kernel, reward_only)
 
   alpha_mb, alpha_mf = \
     estimate_weights_from_mse_components(q_mb_backup, mb_biases_,
@@ -249,3 +256,52 @@ def model_smoothed_backup(q_fn, env, gamma, X, Sp1, transition_model, kernel=rbf
                                          bootstrapped_mse_components_['correlations'])
 
   return alpha_mb*q_mb_backup + alpha_mf*q_mf_backup
+
+
+def optimal_convex_combination(x1, x2, y):
+  """
+  Choose \alpha to minimize || \alpha x1 + (1 - \alpha) x2 - y ||^2.
+
+
+  :param x1:
+  :param x2:
+  :param y:
+  :return:
+  """
+  x1_minus_x2 = x1 - x2
+  alpha = np.dot(x1_minus_x2, y - x2) / np.dot(x1_minus_x2, x1_minus_x2)
+  if alpha < 0:
+    alpha = 0.0
+  elif alpha > 1:
+    alpha = 1.0
+  return alpha
+
+
+def model_smoothed_reward(env, X, transition_model, pairwise_kernels_, kernel=rbf_kernel,
+                          number_of_bootstrap_samples=100):
+  """
+  Estimated MSE-optimal combo of model-free and model-based conditional reward estimates.
+
+  :param env:
+  :param gamma:
+  :param X:
+  :param transition_model:
+  :param pairwise_kernels_: matrix of pairwise kernels for the observed x's; this is updated online during the episode
+  :param kernel:
+  :param number_of_bootstrap_samples:
+  :return:
+  """
+  # mb and mf reward estimates
+  r_mb = transition_model.expected_glucose_reward_at_block(X, env)
+  r_mf = np.hstack(env.R)
+
+  # kde reward estimate
+  r_kde = np.dot(pairwise_kernels_, r_mf)
+
+  # get optimal mixing weight
+  alpha_mb = optimal_convex_combination(r_mb, r_mf, r_kde)
+  alpha_mf = 1 - alpha_mb
+
+  return alpha_mb*r_mb + alpha_mf*r_mf
+
+
