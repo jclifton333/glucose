@@ -18,9 +18,10 @@ method), I'm also trying just choosing alpha to minimize ( \alpha mb_backup + (1
 where kernel_backup is a kde estimator of backups.
 """
 import numpy as np
-from src.policies.policies import expected_q_max, maximize_q_function_at_block
+from helpers import expected_q_max, maximize_q_function_at_block
 from scipy.stats import pearsonr
 from sklearn.metrics.pairwise import pairwise_kernels, rbf_kernel
+import pdb
 
 
 def delta_mf_variance_pooled(delta_mf, bootstrap_weight_array):
@@ -269,11 +270,14 @@ def optimal_convex_combination(x1, x2, y):
   :return:
   """
   x1_minus_x2 = x1 - x2
-  alpha = np.dot(x1_minus_x2, y - x2) / np.dot(x1_minus_x2, x1_minus_x2)
-  if alpha < 0:
-    alpha = 0.0
-  elif alpha > 1:
-    alpha = 1.0
+  if x1_minus_x2 == 0.0:
+    return 1.0
+  else:
+    alpha = np.dot(x1_minus_x2, y - x2) / np.dot(x1_minus_x2, x1_minus_x2)
+    if alpha < 0:
+      alpha = 0.0
+    elif alpha > 1:
+      alpha = 1.0
   return alpha
 
 

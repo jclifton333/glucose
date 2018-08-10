@@ -9,6 +9,7 @@ q: target dimension
 """
 
 
+import pdb
 import numpy as np
 from scipy.special import expit
 from scipy.optimize import minimize
@@ -122,7 +123,7 @@ class TransitionDensityEstimator(object):
 
 
 class MDR(TransitionDensityEstimator):
-  def __init__(self, number_of_mixture_components=3)
+  def __init__(self, number_of_mixture_components=3):
     TransitionDensityEstimator.__init__(self)
     self.number_of_mixture_components = number_of_mixture_components
     self.sigma_vec = None
@@ -161,19 +162,23 @@ class MultivariateLinear(TransitionDensityEstimator):
 
   def get_variance_estimates(self, X, Y):
     assert self.model_is_fit
-
-    Y_hat = self.fitter.predict(X)
-    errors_array = Y_hat - Y
-    n, p = X.shape
-    self.sigma_hat = np.cov(errors_array) / (n - p)
+    if X.shape[0] == 1:
+      self.sigma_hat = np.eye(Y.shape[1])
+    else:
+      # ToDO: Double check this calculation
+      Y_hat = self.fitter.predict(X)
+      errors_array = Y_hat - Y
+      n, p = X.shape
+      self.sigma_hat = np.cov(errors_array) / (n - p)
 
   def fit(self, X, Y):
     super(MultivariateLinear, self).fit(X, Y)
     self.fitter.fit(X, Y)
+    self.get_variance_estimates(X, Y)
 
   def conditional_expectation(self, x):
     super(MultivariateLinear, self).conditional_expectation(x)
-    return self.fitter.predict(x)
+    return self.fitter.predict(x.reshape(1, -1))[0, :]
 
   def conditional_expectation_at_block(self, X):
     return np.array([self.conditional_expectation(x) for x in X])
@@ -186,7 +191,7 @@ class MultivariateLinear(TransitionDensityEstimator):
 
   def simulate_from_fit_model(self, x):
     super(MultivariateLinear, self).simulate_from_fit_model(x)
-    mean = self.fitter.predict(x)
+    mean = self.fitter.predict(x.reshape(1, -1))[0, :]
     y_simulated = np.random.multivariate_normal(mean, cov=self.sigma_hat)
     return y_simulated
 

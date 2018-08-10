@@ -1,6 +1,8 @@
+import pdb
 import numpy as np
 import bellman_error_estimation as be
-from helpers import maximize_q_function_at_block, maximize_q_function_at_x, update_pairwise_kernels_, \
+from helpers import maximize_q_function_at_block, update_pairwise_kernels_
+from sklearn.metrics.pairwise import rbf_kernel
 
 
 # def model_based(env, transition_model_fitter):
@@ -48,18 +50,20 @@ def model_smoothed_fitted_q(env, gamma, regressor, number_of_value_iterations, t
   Fitted q iteration with model-smoothed backup estimates.
   """
 
-
   X, Sp1 = env.get_state_transitions_as_x_y_pair()
   transition_model = transition_model_fitter()
   transition_model.fit(X, Sp1)
 
   pairwise_kernels_, kernel_sums = update_pairwise_kernels_(pairwise_kernels_, kernel, kernel_sums, X)
-  averaged_backup, mb_backup, mf_backup, kde_backup = be.model_smoothed_reward(env, gamma, X, transition_model,
+  averaged_backup, mb_backup, mf_backup, kde_backup = be.model_smoothed_reward(env, X, transition_model,
                                                                                pairwise_kernels_)
 
   # Fit one-step q fn
   reg = regressor()
-  reg.fit(X, averaged_backup)
+  try:
+    reg.fit(X, averaged_backup)
+  except:
+    pdb.set_trace()
 
   # Fit longer-horizon q fns
   for k in range(number_of_value_iterations):

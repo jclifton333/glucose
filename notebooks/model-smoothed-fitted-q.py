@@ -20,26 +20,26 @@ from policies.policies import model_smoothed_fitted_q
 from Glucose import Glucose
 from transition_estimation import MultivariateLinear
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics.pairwise import pairwise_kernels, rbf_kernel
+import numpy as np
 
 
-# In[ ]:
+# In[3]:
 
 
 env = Glucose(horizon=50)
 transition_model_fitter = MultivariateLinear
-pairwise_kernels_ = np.zeros((0,0))
-kernel_sums = 0 
 gamma = 0.9
 number_of_value_iterations = 1
 
 
-# In[ ]:
+# In[4]:
 
 
 done = False
 env.reset()
 while not done:
     action, pairwise_kernel_, kernel_sums =         model_smoothed_fitted_q(env, gamma, RandomForestRegressor, number_of_value_iterations, transition_model_fitter,
-                                pairwise_kernels_, kernel_sums)
+                                pairwise_kernels_=None, kernel_sums=None)
     _, r, done = env.step(action)
 
