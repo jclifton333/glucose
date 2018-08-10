@@ -1,3 +1,4 @@
+from sklearn.metrics.pairwise import pairwise_kernels
 import numpy as np
 import pdb
 
@@ -68,9 +69,10 @@ def update_pairwise_kernels_(pairwise_kernels_, kernel, kernel_sums, X):
   :param X: array of vectors where last row is the new observation for which to compute pairwise kernels
   :return:
   """
-  if X.shape[0] < 2:
-    pairwise_kernels_ = np.array([[1.0]])
-    kernel_sums = np.array([1.0])
+  if pairwise_kernels_ is None:
+    pairwise_kernels_ = pairwise_kernels(X, metric='rbf')
+    kernel_sums = np.sum(pairwise_kernels_, axis=0)
+    pairwise_kernels_ = np.multiply(pairwise_kernels_, 1 / kernel_sums)
   else:
     # Un-normalize
     pairwise_kernels_ = np.multiply(pairwise_kernels_, kernel_sums)

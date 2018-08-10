@@ -11799,7 +11799,6 @@ div#notebook {
 <span class="kn">from</span> <span class="nn">Glucose</span> <span class="kn">import</span> <span class="n">Glucose</span>
 <span class="kn">from</span> <span class="nn">transition_estimation</span> <span class="kn">import</span> <span class="n">MultivariateLinear</span>
 <span class="kn">from</span> <span class="nn">sklearn.ensemble</span> <span class="kn">import</span> <span class="n">RandomForestRegressor</span>
-<span class="kn">from</span> <span class="nn">sklearn.metrics.pairwise</span> <span class="kn">import</span> <span class="n">pairwise_kernels</span><span class="p">,</span> <span class="n">rbf_kernel</span>
 <span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
 </pre></div>
 
@@ -11831,13 +11830,10 @@ div#notebook {
     <div class="input_area">
 <div class=" highlight hl-ipython2"><pre><span></span><span class="n">done</span> <span class="o">=</span> <span class="bp">False</span>
 <span class="n">env</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
-<span class="n">pairwise_kernels_</span> <span class="o">=</span> <span class="n">pairwise_kernels</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">vstack</span><span class="p">(</span><span class="n">env</span><span class="o">.</span><span class="n">X</span><span class="p">),</span> <span class="n">metric</span><span class="o">=</span><span class="s1">&#39;rbf&#39;</span><span class="p">)</span>
-<span class="n">kernel_sums</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">pairwise_kernels_</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
-<span class="n">pairwise_kernels</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">multiply</span><span class="p">(</span><span class="n">pairwise_kernels_</span><span class="p">,</span> <span class="mi">1</span> <span class="o">/</span> <span class="n">kernel_sums</span><span class="p">)</span>
 <span class="k">while</span> <span class="ow">not</span> <span class="n">done</span><span class="p">:</span>
     <span class="n">action</span><span class="p">,</span> <span class="n">pairwise_kernel_</span><span class="p">,</span> <span class="n">kernel_sums</span> <span class="o">=</span> \
         <span class="n">model_smoothed_fitted_q</span><span class="p">(</span><span class="n">env</span><span class="p">,</span> <span class="n">gamma</span><span class="p">,</span> <span class="n">RandomForestRegressor</span><span class="p">,</span> <span class="n">number_of_value_iterations</span><span class="p">,</span> <span class="n">transition_model_fitter</span><span class="p">,</span>
-                                <span class="n">pairwise_kernels_</span><span class="p">,</span> <span class="n">kernel_sums</span><span class="p">)</span>
+                                <span class="n">pairwise_kernels_</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">kernel_sums</span><span class="o">=</span><span class="bp">None</span><span class="p">)</span>
     <span class="n">_</span><span class="p">,</span> <span class="n">r</span><span class="p">,</span> <span class="n">done</span> <span class="o">=</span> <span class="n">env</span><span class="o">.</span><span class="n">step</span><span class="p">(</span><span class="n">action</span><span class="p">)</span>
 </pre></div>
 
@@ -11854,12 +11850,32 @@ div#notebook {
 <div class="prompt"></div>
 
 
+<div class="output_subarea output_stream output_stderr output_text">
+<pre>/users/jclih/glucose/src/transition_estimation.py:212: RuntimeWarning: covariance is not positive-semidefinite.
+  y_simulated = np.random.multivariate_normal(mean, cov=self.sigma_hat)
+/users/jclih/glucose/src/transition_estimation.py:172: RuntimeWarning: divide by zero encountered in divide
+  self.sigma_hat = np.cov(errors_array.T) / (n - p)
+</pre>
+</div>
+</div>
+
+<div class="output_area">
+
+<div class="prompt"></div>
+
+
 <div class="output_subarea output_stream output_stdout output_text">
-<pre>&gt; /users/jclih/glucose/src/policies/helpers.py(82)update_pairwise_kernels_()
--&gt; pairwise_kernels_[-1, :] = new_row
-(Pdb) new_row
-array([[1.],
-       [1.]])
+<pre>&gt; /users/jclih/glucose/src/transition_estimation.py(223)simulate_from_fit_model_at_block()
+-&gt; Sp1.append(sp1), Xp1.append(xp1)
+(Pdb) sp1
+*** NameError: name &#39;sp1&#39; is not defined
+(Pdb) print(x)
+[  1.         231.61125305  -0.           4.20477625 231.61125305
+  -0.           4.20477625   0.           0.        ]
+(Pdb) self.sigma_hat
+array([[ inf, -inf,  inf],
+       [-inf,  inf, -inf],
+       [ inf, -inf,  inf]])
 </pre>
 </div>
 </div>

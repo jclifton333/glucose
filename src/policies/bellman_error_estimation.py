@@ -269,10 +269,10 @@ def optimal_convex_combination(x1, x2, y):
   :param y:
   :return:
   """
-  x1_minus_x2 = x1 - x2
-  if x1_minus_x2 == 0.0:
+  if np.array_equal(x1, x2):
     return 1.0
   else:
+    x1_minus_x2 = x1 - x2
     alpha = np.dot(x1_minus_x2, y - x2) / np.dot(x1_minus_x2, x1_minus_x2)
     if alpha < 0:
       alpha = 0.0

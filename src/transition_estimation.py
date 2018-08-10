@@ -169,7 +169,7 @@ class MultivariateLinear(TransitionDensityEstimator):
       Y_hat = self.fitter.predict(X)
       errors_array = Y_hat - Y
       n, p = X.shape
-      self.sigma_hat = np.cov(errors_array) / (n - p)
+      self.sigma_hat = np.cov(errors_array.T) / np.max((n - p, 1))
 
   def fit(self, X, Y):
     super(MultivariateLinear, self).fit(X, Y)
