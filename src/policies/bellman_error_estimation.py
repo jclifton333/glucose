@@ -308,7 +308,7 @@ def model_smoothed_reward(env, X, transition_model, pairwise_kernels_):
   return alpha_mb*r_mb + alpha_mf*r_mf, r_mb, r_mf, r_kde
 
 
-def model_smoothed_qmax(q_fn, q_mf_backup, q_mb_backup, q_kde_backup, env, gamma, X, transition_model,
+def model_smoothed_qmax(q_fn, q_mf_backup, q_mb_backup, q_kde_backup, env, gamma, X, Xp1, transition_model,
                         pairwise_kernels_):
 
   # backup with mb and mf E[q_max] estimates
@@ -324,7 +324,7 @@ def model_smoothed_qmax(q_fn, q_mf_backup, q_mb_backup, q_kde_backup, env, gamma
   alpha_mb = optimal_convex_combination(q_mb_backup, q_mf_backup, q_kde_backup)
   alpha_mf = 1 - alpha_mb
 
-  return alpha_mb*q_mb_backup + alpha_mf*q_mf_backup
+  return alpha_mb*q_mb_backup + alpha_mf*q_mf_backup, q_mb_backup, q_mf_backup, q_kde_backup
 
 
 

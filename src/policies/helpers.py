@@ -11,10 +11,7 @@ def maximize_q_function_at_x(q_fn, x, env):
   :return:
   """
   x0, x1 = env.get_state_at_action(0, x), env.get_state_at_action(1, x)
-  try:
-    q0, q1 = q_fn(x0.reshape(1, -1)), q_fn(x1.reshape(1, -1))
-  except:
-    pdb.set_trace()
+  q0, q1 = q_fn(x0.reshape(1, -1)), q_fn(x1.reshape(1, -1))
   return np.max([q0, q1]), np.argmax([q0, q1])
 
 
@@ -48,8 +45,8 @@ def expected_q_max(q_fn, X, env, transition_model, num_draws=10):
   """
   expected_q_max_ = np.zeros(X.shape[0])
   for draw in range(num_draws):
-    Xp1 = transition_model.simulate_from_fit_model_at_block(X)
-    q_max_at_draw = maximize_q_function_at_block(q_fn, Xp1, env)
+    _, Xp1 = transition_model.simulate_from_fit_model_at_block(X)
+    q_max_at_draw, _ = maximize_q_function_at_block(q_fn, Xp1, env)
     expected_q_max_ += (q_max_at_draw - expected_q_max_) / (draw + 1)
   return expected_q_max_
 
@@ -71,7 +68,7 @@ def update_pairwise_kernels_(pairwise_kernels_, kernel, kernel_sums, X):
   :param X: array of vectors where last row is the new observation for which to compute pairwise kernels
   :return:
   """
-  if X.shape[0] == 1:
+  if X.shape[0] < 2:
     pairwise_kernels_ = np.array([[1.0]])
     kernel_sums = np.array([1.0])
   else:
@@ -81,6 +78,7 @@ def update_pairwise_kernels_(pairwise_kernels_, kernel, kernel_sums, X):
     # Get kernels at new state
     new_row = np.array([kernel(X[-1, :].reshape(1, -1), X[i, :].reshape(1, -1))[0] for i in range(X.shape[0])])
     pairwise_kernels_ = add_crust_to_square_matrix(pairwise_kernels_)
+    pdb.set_trace()
     pairwise_kernels_[-1, :] = new_row
     pairwise_kernels_[:, -1] = new_row
 

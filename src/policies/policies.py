@@ -54,21 +54,21 @@ def model_smoothed_fitted_q(env, gamma, regressor, number_of_value_iterations, t
   transition_model = transition_model_fitter()
   transition_model.fit(X, Sp1)
 
+  X = env.get_state_history_as_array()
+  X, Xp1 = X[:-1, :], X[1:, :]
+
   pairwise_kernels_, kernel_sums = update_pairwise_kernels_(pairwise_kernels_, kernel, kernel_sums, X)
   averaged_backup, mb_backup, mf_backup, kde_backup = be.model_smoothed_reward(env, X, transition_model,
                                                                                pairwise_kernels_)
 
   # Fit one-step q fn
   reg = regressor()
-  try:
-    reg.fit(X, averaged_backup)
-  except:
-    pdb.set_trace()
+  reg.fit(X, averaged_backup)
 
   # Fit longer-horizon q fns
   for k in range(number_of_value_iterations):
     averaged_backup, mb_backup, mf_backup, kde_backup = \
-      be.model_smoothed_qmax(reg.predict, mb_backup, mf_backup, kde_backup, env, gamma, X, transition_model,
+      be.model_smoothed_qmax(reg.predict, mb_backup, mf_backup, kde_backup, env, gamma, X, Xp1, transition_model,
                              pairwise_kernels_)
     reg.fit(X, averaged_backup)
 

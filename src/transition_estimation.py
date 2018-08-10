@@ -189,15 +189,34 @@ class MultivariateLinear(TransitionDensityEstimator):
     R = np.array([env.reward_function(X[i, 4:7], Sp1[i, :]) for i in range(n)])
     return R
 
+  @staticmethod
+  def get_xp1_from_x_and_sp1(x, sp1):
+    """
+    The fitted model predicts states (sp1) from full feature vectors (x).  We want to get the full feature vector
+    (xp1) from x and sp1.  (This is Glucose-specific.)
+
+    Because we need an action at time tp1, we'll fill in the corresponding action entry with 0.  This will be
+    max'd over in computing E[max Q], anyway.
+
+    :param x:
+    :param sp1:
+    :return:
+    """
+    s = x[2:5]
+    xp1 = np.concatenate(([1.0], s, sp1, [x[-2]], [0.0]))
+    return xp1
+
   def simulate_from_fit_model(self, x):
     super(MultivariateLinear, self).simulate_from_fit_model(x)
     mean = self.fitter.predict(x.reshape(1, -1))[0, :]
     y_simulated = np.random.multivariate_normal(mean, cov=self.sigma_hat)
-    return y_simulated
+    return y_simulated, self.get_xp1_from_x_and_sp1(x, y_simulated)
 
   def simulate_from_fit_model_at_block(self, X):
-    return np.array([self.simulate_from_fit_model(x) for x in X])
-
-
-
+    Sp1 = []
+    Xp1 = []
+    for x in X:
+      sp1, xp1 = self.simulate_from_fit_model(x)
+      Sp1.append(sp1), Xp1.append(xp1)
+    return np.vstack(Sp1), np.vstack(Xp1)
 

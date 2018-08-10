@@ -24,7 +24,7 @@ from sklearn.metrics.pairwise import pairwise_kernels, rbf_kernel
 import numpy as np
 
 
-# In[3]:
+# In[ ]:
 
 
 env = Glucose(horizon=50)
@@ -33,13 +33,16 @@ gamma = 0.9
 number_of_value_iterations = 1
 
 
-# In[4]:
+# In[ ]:
 
 
 done = False
 env.reset()
+pairwise_kernels_ = pairwise_kernels(np.vstack(env.X), metric='rbf')
+kernel_sums = np.sum(pairwise_kernels_, axis=0)
+pairwise_kernels = np.multiply(pairwise_kernels_, 1 / kernel_sums)
 while not done:
     action, pairwise_kernel_, kernel_sums =         model_smoothed_fitted_q(env, gamma, RandomForestRegressor, number_of_value_iterations, transition_model_fitter,
-                                pairwise_kernels_=None, kernel_sums=None)
+                                pairwise_kernels_, kernel_sums)
     _, r, done = env.step(action)
 
