@@ -67,11 +67,11 @@ def model_smoothed_fitted_q(env, gamma, regressor, number_of_value_iterations, t
 
   # Fit longer-horizon q fns
   for k in range(number_of_value_iterations):
-    averaged_backup, mb_backup, mf_backup, kde_backup = \
+    averaged_backup, mb_backup, mf_backup, kde_backup, alpha_mb = \
       be.model_smoothed_qmax(reg.predict, mb_backup, mf_backup, kde_backup, env, gamma, X, Xp1, transition_model,
                              pairwise_kernels_)
     reg.fit(X, averaged_backup)
-
+    print('k {} alpha_mb {}'.format(k, alpha_mb))
   # Maximize final q iterate to get next action
   _, list_of_optimal_actions = maximize_q_function_at_block(reg.predict, X, env)
 

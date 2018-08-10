@@ -23,10 +23,10 @@ from sklearn.ensemble import RandomForestRegressor
 import numpy as np
 
 
-# In[ ]:
+# In[5]:
 
 
-env = Glucose(horizon=50)
+env = Glucose(horizon=100)
 transition_model_fitter = MultivariateLinear
 gamma = 0.9
 number_of_value_iterations = 1

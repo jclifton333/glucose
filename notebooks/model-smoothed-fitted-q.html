@@ -11809,10 +11809,10 @@ div#notebook {
 </div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
-<div class="prompt input_prompt">In&nbsp;[&nbsp;]:</div>
+<div class="prompt input_prompt">In&nbsp;[5]:</div>
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span></span><span class="n">env</span> <span class="o">=</span> <span class="n">Glucose</span><span class="p">(</span><span class="n">horizon</span><span class="o">=</span><span class="mi">50</span><span class="p">)</span>
+<div class=" highlight hl-ipython2"><pre><span></span><span class="n">env</span> <span class="o">=</span> <span class="n">Glucose</span><span class="p">(</span><span class="n">horizon</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
 <span class="n">transition_model_fitter</span> <span class="o">=</span> <span class="n">MultivariateLinear</span>
 <span class="n">gamma</span> <span class="o">=</span> <span class="mf">0.9</span>
 <span class="n">number_of_value_iterations</span> <span class="o">=</span> <span class="mi">1</span>
@@ -11850,32 +11850,29 @@ div#notebook {
 <div class="prompt"></div>
 
 
-<div class="output_subarea output_stream output_stderr output_text">
-<pre>/users/jclih/glucose/src/transition_estimation.py:212: RuntimeWarning: covariance is not positive-semidefinite.
-  y_simulated = np.random.multivariate_normal(mean, cov=self.sigma_hat)
-/users/jclih/glucose/src/transition_estimation.py:172: RuntimeWarning: divide by zero encountered in divide
-  self.sigma_hat = np.cov(errors_array.T) / (n - p)
-</pre>
-</div>
-</div>
-
-<div class="output_area">
-
-<div class="prompt"></div>
-
-
 <div class="output_subarea output_stream output_stdout output_text">
-<pre>&gt; /users/jclih/glucose/src/transition_estimation.py(223)simulate_from_fit_model_at_block()
--&gt; Sp1.append(sp1), Xp1.append(xp1)
-(Pdb) sp1
-*** NameError: name &#39;sp1&#39; is not defined
-(Pdb) print(x)
-[  1.         231.61125305  -0.           4.20477625 231.61125305
-  -0.           4.20477625   0.           0.        ]
-(Pdb) self.sigma_hat
-array([[ inf, -inf,  inf],
-       [-inf,  inf, -inf],
-       [ inf, -inf,  inf]])
+<pre>k 0 alpha_mb 1.0
+k 0 alpha_mb 0.19780509935
+k 0 alpha_mb 0.697334207704
+k 0 alpha_mb 0.534223153088
+k 0 alpha_mb 0.544308442866
+k 0 alpha_mb 0.356007162818
+k 0 alpha_mb 0.328668565836
+k 0 alpha_mb 0.364727485761
+k 0 alpha_mb 0.280233658185
+k 0 alpha_mb 0.31461990545
+k 0 alpha_mb 0.246090084497
+k 0 alpha_mb 0.305849200952
+k 0 alpha_mb 0.29316329096
+k 0 alpha_mb 0.255319044423
+k 0 alpha_mb 0.235959250663
+k 0 alpha_mb 0.260415824411
+k 0 alpha_mb 0.270444896696
+k 0 alpha_mb 0.296222566372
+k 0 alpha_mb 0.282434263905
+k 0 alpha_mb 0.259925683881
+k 0 alpha_mb 0.257117142834
+k 0 alpha_mb 0.251238720529
 </pre>
 </div>
 </div>

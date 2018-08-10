@@ -324,7 +324,7 @@ def model_smoothed_qmax(q_fn, q_mf_backup, q_mb_backup, q_kde_backup, env, gamma
   alpha_mb = optimal_convex_combination(q_mb_backup, q_mf_backup, q_kde_backup)
   alpha_mf = 1 - alpha_mb
 
-  return alpha_mb*q_mb_backup + alpha_mf*q_mf_backup, q_mb_backup, q_mf_backup, q_kde_backup
+  return alpha_mb*q_mb_backup + alpha_mf*q_mf_backup, q_mb_backup, q_mf_backup, q_kde_backup, alpha_mb
 
 
 
