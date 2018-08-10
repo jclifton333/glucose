@@ -1,5 +1,5 @@
 import numpy as np
-from bellman_error_estimation import model_smoothed_backup
+import bellman_error_estimation as be
 
 
 def maximize_q_function_at_x(q_fn, x, env):
@@ -71,32 +71,70 @@ def fitted_q(env, gamma, regressor, number_of_value_iterations):
   return optimal_action
 
 
-def model_smoothed_fitted_q(env, gamma, regressor, number_of_value_iterations, transition_model_fitter):
+def add_crust_to_square_matrix(M):
+  m = M.shape[0]
+  M = np.vstack((M, np.zeros(m)))
+  M = np.column_stack((M, np.zeros(m)))
+  return M
+
+
+def update_pairwise_kernels_(pairwise_kernels_, kernel, kernel_sums, X):
+  """
+
+  :param pairwise_kernels_:
+  :param kernel_sums: Normalizing constants (i.e. sum(pairwise_kernels, axis=0) before pairwise_kernels_ was divided
+                      by same)
+  :param X: array of vectors where last row is the new observation for which to compute pairwise kernels
+  :return:
+  """
+  # Un-normalize
+  pairwise_kernels_ = np.multiply(pairwise_kernels_, kernel_sums)
+
+  # Get kernels at new state
+  new_row = np.array([kernel(X[-1, :], X[i, :]) for i in range(X.shape[0])])
+  pairwise_kernels_ = add_crust_to_square_matrix(pairwise_kernels_)
+  pairwise_kernels_[-1, :] = new_row
+  pairwise_kernels_[:, -1] = new_row
+
+  # Renormalize
+  kernel_sums += new_row
+  pairwise_kernels_ = np.multiply(pairwise_kernels_, 1 / kernel_sums)
+
+  return pairwise_kernels_, kernel_sums
+
+
+def model_smoothed_fitted_q(env, gamma, regressor, number_of_value_iterations, transition_model_fitter,
+                            pairwise_kernels_, kernel_sums, kernel=rbf_kernel):
   """
   Fitted q iteration with model-smoothed backup estimates.
   """
 
+
   X, Sp1 = env.get_state_transitions_as_x_y_pair()
   transition_model = transition_model_fitter()
   transition_model.fit(X, Sp1)
-  target = model_smoothed_backup(None, env, gamma, X, Sp1, transition_model, reward_only=True)
+
+  pairwise_kernels_, kernel_sums = update_pairwise_kernels_(pairwise_kernels_, kernel, kernel_sums, X)
+  averaged_backup, mb_backup, mf_backup, kde_backup = be.model_smoothed_reward(env, gamma, X, transition_model,
+                                                                               pairwise_kernels_)
 
   # Fit one-step q fn
   reg = regressor()
-  reg.fit(X, target)
+  reg.fit(X, averaged_backup)
 
   # Fit longer-horizon q fns
   for k in range(number_of_value_iterations):
-    backup = model_smoothed_backup(reg.predict, env, gamma, X, Sp1, transition_model)
-    target += backup
-    reg.fit(X, target)
+    averaged_backup, mb_backup, mf_backup, kde_backup = \
+      be.model_smoothed_qmax(reg.predict, mb_backup, mf_backup, kde_backup, env, gamma, X, transition_model,
+                             pairwise_kernels_)
+    reg.fit(X, averaged_backup)
 
   # Maximize final q iterate to get next action
   _, list_of_optimal_actions = maximize_q_function_at_block(reg.predict, X, env)
 
   # Last entry of list gives optimal action at current state
   optimal_action = list_of_optimal_actions[-1]
-  return optimal_action
+  return optimal_action, pairwise_kernels_, kernel_sums
 
 
 def expected_q_max(q_fn, X, env, transition_model, num_draws=10):

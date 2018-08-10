@@ -277,8 +277,7 @@ def optimal_convex_combination(x1, x2, y):
   return alpha
 
 
-def model_smoothed_reward(env, X, transition_model, pairwise_kernels_, kernel=rbf_kernel,
-                          number_of_bootstrap_samples=100):
+def model_smoothed_reward(env, X, transition_model, pairwise_kernels_):
   """
   Estimated MSE-optimal combo of model-free and model-based conditional reward estimates.
 
@@ -302,6 +301,27 @@ def model_smoothed_reward(env, X, transition_model, pairwise_kernels_, kernel=rb
   alpha_mb = optimal_convex_combination(r_mb, r_mf, r_kde)
   alpha_mf = 1 - alpha_mb
 
-  return alpha_mb*r_mb + alpha_mf*r_mf
+  return alpha_mb*r_mb + alpha_mf*r_mf, r_mb, r_mf, r_kde
+
+
+def model_smoothed_qmax(q_fn, q_mf_backup, q_mb_backup, q_kde_backup, env, gamma, X, transition_model,
+                        pairwise_kernels_):
+
+  # backup with mb and mf E[q_max] estimates
+  q_max_mb = expected_q_max(q_fn, X, env, transition_model)
+  q_max_mf, _ = maximize_q_function_at_block(q_fn, Xp1, env)
+  q_mb_backup += gamma * q_max_mb
+  q_mf_backup += gamma * q_max_mf
+
+  # backup kde estimate
+  q_kde_backup += gamma * np.dot(pairwise_kernels_, q_max_mf)
+
+  # get optimal mixing weight
+  alpha_mb = optimal_convex_combination(q_mb_backup, q_mf_backup, q_kde_backup)
+  alpha_mf = 1 - alpha_mb
+
+  return alpha_mb*q_mb_backup + alpha_mf*q_mf_backup
+
+
 
 
