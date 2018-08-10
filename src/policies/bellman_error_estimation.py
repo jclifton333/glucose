@@ -18,7 +18,7 @@ method), I'm also trying just choosing alpha to minimize ( \alpha mb_backup + (1
 where kernel_backup is a kde estimator of backups.
 """
 import numpy as np
-from policies.policies import expected_q_max, maximize_q_function_at_block
+from src.policies.policies import expected_q_max, maximize_q_function_at_block
 from scipy.stats import pearsonr
 from sklearn.metrics.pairwise import pairwise_kernels, rbf_kernel
 
@@ -122,7 +122,7 @@ def mb_backup(q_fn, env, gamma, X, transition_model, reward_only=False):
 
 def mf_backup(q_fn, env, gamma, Xp1, reward_only=False):
   R = np.hstack(env.R)
-  if not reward_only
+  if not reward_only:
     q_max = maximize_q_function_at_block(q_fn, Xp1, env)
     backup = R + gamma * q_max
   else:
