@@ -132,14 +132,10 @@ def mf_backup(q_fn, env, gamma, Xp1, reward_only=False):
 
 
 def bootstrapped_kernel_mse_components(q_fn, q_mf_backup, env, gamma, transition_model, number_of_bootstrap_samples, X,
-                                       Xp1, Sp1, reward_only):
+                                       Xp1, Sp1, pairwise_kernels_, reward_only):
   n = X.shape[0]
   bootstrap_mf_backup_dbn = np.zeros((0, n))
   bootstrap_mb_backup_dbn = np.zeros((0, n))
-
-  pairwise_kernels_ = pairwise_kernels(X)
-  kernel_sums = np.sum(pairwise_kernels, axis=1)
-  pairwise_kernels_ = np.dot(np.diag(1 / kernel_sums), pairwise_kernels_)  # Weight kernels by normalizing constants
 
   mf_variances = np.zeros(n)
   mb_variances = np.zeros(n)
@@ -170,29 +166,15 @@ def bootstrapped_kernel_mse_components(q_fn, q_mf_backup, env, gamma, transition
     covariances += covariances_b_kernelized
 
   correlations = covariances / np.sqrt(np.multiply(mb_variances, mf_variances))
-  return {'mf_variances': mf_variances, 'mb_biases': mb_biases, 'mb_variances': mb_variances,
+  return {'mf_variances': mf_variances, 'mb_variances': mb_variances,
           'correlations': correlations}
 
 
-def kernel_bias_estimator(q_fn, env, gamma, transition_model, X, Xp1, R, kernel, reward_only):
-  n = X.shape[0]
-  q_mb_backup = mb_backup(q_fn, env, gamma, X, transition_model, reward_only=reward_only)
-  q_mf_backup = mf_backup(q_fn, env, gamma, R, Xp1, reward_only=reward_only)
+def kernel_bias_estimator(q_mb_backup, q_mf_backup, pairwise_kernels_):
 
-  mb_biases = []
   # Compare mb backups to (kernel-smoothed) mf backups
-  for t in range(n):
-    x = X[t, :]
-    backup_at_x = q_mb_backup[t]
-    kernel_bias_estimator_ = 0.0
-    kernel_normalizing_constant = 0.0
-    for s in range(n):
-      x_s = X[s, :]
-      mf_backup_at_x_s = q_mf_backup[s]
-      kernel_distance = kernel(x, x_s)
-      kernel_bias_estimator_ += (backup_at_x - mf_backup_at_x_s) * kernel_distance
-      kernel_normalizing_constant += kernel_distance
-    mb_biases.append(kernel_bias_estimator_ / kernel_normalizing_constant)
+  mb_biases = np.dot(pairwise_kernels_, q_mb_backup - q_mf_backup)
+
   return {'mb_biases': np.array(mb_biases)}
 
 
@@ -219,9 +201,10 @@ def estimate_weights_from_mse_components(q_mb_backup, mb_biases, mb_variances, m
   return alpha_mb, alpha_mf
 
 
-# ToDo: Split into model-smoothed reward and model-smoothed expected_q_max
-def model_smoothed_backup(q_fn, env, gamma, X, Sp1, transition_model, kernel=rbf_kernel, reward_only=False,
-                          number_of_bootstrap_samples=100):
+# ToDo: Split into model-smoothed reward and model-smoothed expected_q_max?
+def model_smoothed_backup_using_mse(q_mb_backup, q_mf_backup, q_fn, env, gamma, X, Sp1, transition_model,
+                                    pairwise_kernels_, reward_only=False,
+                                    number_of_bootstrap_samples=100):
   """
   Estimate Bellman backup of q_fn by taking estimated MSE-optimal combination of model-free and model-based backups.
 
@@ -241,22 +224,19 @@ def model_smoothed_backup(q_fn, env, gamma, X, Sp1, transition_model, kernel=rbf
   # Get backed_up_q_mf
   X, Xp1 = X[:-1, :], X[1:, :]
 
-  q_mf_backup = mf_backup(q_fn, env, gamma, Xp1, reward_only=reward_only)
-  q_mb_backup = mb_backup(q_fn, env, gamma, X, transition_model, reward_only=reward_only)
-
   # Get components needed to estimate alphas
-  bootstrapped_mse_components_ = bootstrapped_kernel_mse_components(q_fn, env, gamma, transition_model,
-                                                                    number_of_bootstrap_samples, X, Xp1, Sp1,
-                                                                    reward_only)
-  mb_biases_ = kernel_bias_estimator(q_fn, env, gamma, transition_model, X, Xp1, R, kernel, reward_only)
+  bootstrapped_mse_components_ = \
+    bootstrapped_kernel_mse_components(q_fn, env, gamma, transition_model, number_of_bootstrap_samples, X, Xp1, Sp1,
+                                       pairwise_kernels_, reward_only)
 
-  alpha_mb, alpha_mf = \
-    estimate_weights_from_mse_components(q_mb_backup, mb_biases_,
-                                         bootstrapped_mse_components_['mb_variances'],
-                                         bootstrapped_mse_components_['mf_variances'],
-                                         bootstrapped_mse_components_['correlations'])
+  mb_biases_ = kernel_bias_estimator(q_mb_backup, q_mf_backup, pairwise_kernels_)
 
-  return alpha_mb*q_mb_backup + alpha_mf*q_mf_backup
+  alpha_mb, alpha_mf = estimate_weights_from_mse_components(q_mb_backup, mb_biases_,
+                                                             bootstrapped_mse_components_['mb_variances'],
+                                                             bootstrapped_mse_components_['mf_variances'],
+                                                             bootstrapped_mse_components_['correlations'])
+
+  return alpha_mb, alpha_mf
 
 
 def optimal_convex_combination(x1, x2, y):
@@ -308,8 +288,23 @@ def model_smoothed_reward(env, X, transition_model, pairwise_kernels_):
   return alpha_mb*r_mb + alpha_mf*r_mf, r_mb, r_mf, r_kde
 
 
-def model_smoothed_qmax(q_fn, q_mf_backup, q_mb_backup, q_kde_backup, env, gamma, X, Xp1, transition_model,
-                        pairwise_kernels_):
+def model_smoothed_qmax(q_fn, q_mf_backup, q_mb_backup, q_kde_backup, env, gamma, X, Xp1, Sp1, transition_model,
+                        pairwise_kernels_, method='kde'):
+  """
+
+  :param q_fn:
+  :param q_mf_backup:
+  :param q_mb_backup:
+  :param q_kde_backup:
+  :param env:
+  :param gamma:
+  :param X:
+  :param Xp1:
+  :param transition_model:
+  :param pairwise_kernels_:
+  :param method: 'kde' or 'mse'
+  :return:
+  """
 
   # backup with mb and mf E[q_max] estimates
   q_max_mb = expected_q_max(q_fn, X, env, transition_model)
@@ -317,12 +312,14 @@ def model_smoothed_qmax(q_fn, q_mf_backup, q_mb_backup, q_kde_backup, env, gamma
   q_mb_backup += gamma * q_max_mb
   q_mf_backup += gamma * q_max_mf
 
-  # backup kde estimate
-  q_kde_backup += gamma * np.dot(pairwise_kernels_, q_max_mf)
-
-  # get optimal mixing weight
-  alpha_mb = optimal_convex_combination(q_mb_backup, q_mf_backup, q_kde_backup)
-  alpha_mf = 1 - alpha_mb
+  if method == 'kde':
+    q_kde_backup += gamma * np.dot(pairwise_kernels_, q_max_mf)
+    alpha_mb = optimal_convex_combination(q_mb_backup, q_mf_backup, q_kde_backup)
+    alpha_mf = 1 - alpha_mb
+  elif method == 'mse':
+    alpha_mb, alpha_mf = model_smoothed_backup_using_mse(q_mb_backup, q_mf_backup, q_fn, env, gamma, X, Sp1,
+                                                         transition_model, pairwise_kernels_, reward_only=False,
+                                                         number_of_bootstrap_samples=100)
 
   return alpha_mb*q_mb_backup + alpha_mf*q_mf_backup, q_mb_backup, q_mf_backup, q_kde_backup, alpha_mb
 

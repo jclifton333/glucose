@@ -45,11 +45,20 @@ def fitted_q(env, gamma, regressor, number_of_value_iterations):
 
 
 def model_smoothed_fitted_q(env, gamma, regressor, number_of_value_iterations, transition_model_fitter,
-                            pairwise_kernels_, kernel_sums, kernel=rbf_kernel):
-  """
-  Fitted q iteration with model-smoothed backup estimates.
+                            pairwise_kernels_, kernel_sums, kernel=rbf_kernel, smoothing_method='kde'):
   """
 
+  :param env:
+  :param gamma:
+  :param regressor:
+  :param number_of_value_iterations:
+  :param transition_model_fitter:
+  :param pairwise_kernels_:
+  :param kernel_sums:
+  :param kernel:
+  :param smoothing_method: either 'kde' or 'mse', for two different ways of averaging mb and mf backup estimates.
+  :return:
+  """
   X, Sp1 = env.get_state_transitions_as_x_y_pair()
   transition_model = transition_model_fitter()
   transition_model.fit(X, Sp1)
@@ -71,7 +80,6 @@ def model_smoothed_fitted_q(env, gamma, regressor, number_of_value_iterations, t
       be.model_smoothed_qmax(reg.predict, mb_backup, mf_backup, kde_backup, env, gamma, X, Xp1, transition_model,
                              pairwise_kernels_)
     reg.fit(X, averaged_backup)
-    print('k {} alpha_mb {}'.format(k, alpha_mb))
   # Maximize final q iterate to get next action
   _, list_of_optimal_actions = maximize_q_function_at_block(reg.predict, X, env)
 

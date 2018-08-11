@@ -73,6 +73,13 @@ class Glucose(object):
 
     :return:
     """
+    # Reset obs history
+    self.R = []  # List of rewards at each time step
+    self.A = []  # List of actions at each time step
+    self.X = []  # List of features (previous and current states) at each time step
+    self.S = []
+
+    # Generate first states
     food, activity = self.generate_food_and_activity()
     glucose = np.random.normal(Glucose.MU_GLUCOSE, Glucose.SIGMA_GLUCOSE)
     x = np.array([1, glucose, food, activity, glucose, food, activity, 0, 0])
