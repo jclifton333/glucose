@@ -1,4 +1,20 @@
 import numpy as np
+import pdb
+from src.policies.helpers import expected_q_max, maximize_q_function_at_block
+
+
+def mb_backup(q_fn, env, gamma, X, transition_model):
+  r_expected = transition_model.expected_glucose_reward_at_block(X, env)
+  expected_q_max_ = expected_q_max(q_fn, X, env, transition_model)
+  backup = r_expected + gamma * expected_q_max_
+  return backup
+
+
+def mf_backup(q_fn, env, gamma, Xp1):
+  r = np.hstack(env.R)
+  q_max, _ = maximize_q_function_at_block(q_fn, Xp1, env)
+  backup = r + gamma * q_max
+  return backup
 
 
 def mse_components_for_reward(r_mf, r_mb, env, transition_model, number_of_bootstrap_samples, X, Sp1, pairwise_kernels_):
@@ -14,7 +30,7 @@ def mse_components_for_reward(r_mf, r_mb, env, transition_model, number_of_boots
   for b in range(number_of_bootstrap_samples):
     # Compute backups
     multiplier = np.random.exponential(size=n)
-    X_b, Sp1_b, r_mf_b = np.multiply(multiplier, X), np.multiply(multiplier, Sp1), np.multiply(multiplier, r_mf)
+    X_b, Sp1_b, r_mf_b = np.multiply(X, multiplier), np.multiply(Sp1, multiplier), np.multiply(r_mf, multiplier)
     transition_model.fit(X_b, Sp1_b)
     r_mb_b = transition_model.expected_glucose_reward_at_block(X, env)
     bootstrap_r_mf_dbn = np.vstack((bootstrap_r_mf_dbn, r_mf_b))
@@ -38,8 +54,8 @@ def mse_components_for_reward(r_mf, r_mb, env, transition_model, number_of_boots
           'correlations': correlations}
 
 
-def mse_components_for_qmax(q_fn, q_mf_backup, env, gamma, transition_model, number_of_bootstrap_samples, X,
-                            Xp1, Sp1, pairwise_kernels_):
+def mse_components_for_qmax(q_fn, q_mb_backup, q_mf_backup, env, gamma, transition_model, number_of_bootstrap_samples,
+                            X, Xp1, Sp1, pairwise_kernels_):
   n = X.shape[0]
 
   mf_variances = np.zeros(n)
@@ -49,7 +65,6 @@ def mse_components_for_qmax(q_fn, q_mf_backup, env, gamma, transition_model, num
   bootstrap_mb_backup_dbn = np.zeros((0, n))
   bootstrap_mf_backup_dbn = np.zeros((0, n))
 
-  for b in range(number_of_bootstrap_samples):
   for b in range(number_of_bootstrap_samples):
     # Compute backups
     multiplier = np.random.exponential(size=n)
@@ -74,6 +89,7 @@ def mse_components_for_qmax(q_fn, q_mf_backup, env, gamma, transition_model, num
     covariances_b_kernelized = np.dot(pairwise_kernels_, covariances_b)
     covariances += covariances_b_kernelized
 
+  mf_variances = np.max([mf_variances, np.ones(n)*0.1], axis=0)
   correlations = covariances / np.sqrt(np.multiply(mb_variances, mf_variances))
   return {'mf_variances': mf_variances, 'mb_variances': mb_variances,
           'correlations': correlations}
@@ -106,7 +122,6 @@ def estimate_weights_from_mse_components(q_mb_backup, mb_biases, mb_variances, m
   alpha_mf = \
     (lambda_ * (lambda_ - correlations)) / (1 - 2 * correlations * lambda_ + lambda_ ** 2 + (1 + correlations ** 2) * (v_mf / k_mb))
   alpha_mb = 1 - alpha_mf
-
   return alpha_mb, alpha_mf
 
 
@@ -133,7 +148,7 @@ def model_smoothed_reward_using_mse(r_mb, r_mf, env, X, Sp1, transition_model, p
 
   mb_biases_ = kernel_bias_estimator(r_mb, r_mf, pairwise_kernels_)
 
-  alpha_mb, alpha_mf = estimate_weights_from_mse_components(q_mb_backup, mb_biases_,
+  alpha_mb, alpha_mf = estimate_weights_from_mse_components(r_mb, mb_biases_['mb_biases'],
                                                              bootstrapped_mse_components_['mb_variances'],
                                                              bootstrapped_mse_components_['mf_variances'],
                                                              bootstrapped_mse_components_['correlations'])
@@ -161,12 +176,12 @@ def model_smoothed_qmax_using_mse(q_mb_backup, q_mf_backup, q_fn, env, gamma, X,
 
   # Get components needed to estimate alphas
   bootstrapped_mse_components_ = \
-    mse_components_for_qmax(q_fn, q_mf_backup, env, gamma, transition_model, number_of_bootstrap_samples, X,
+    mse_components_for_qmax(q_fn, q_mb_backup, q_mf_backup, env, gamma, transition_model, number_of_bootstrap_samples, X,
                              Xp1, Sp1, pairwise_kernels_)
 
   mb_biases_ = kernel_bias_estimator(q_mb_backup, q_mf_backup, pairwise_kernels_)
 
-  alpha_mb, alpha_mf = estimate_weights_from_mse_components(q_mb_backup, mb_biases_,
+  alpha_mb, alpha_mf = estimate_weights_from_mse_components(q_mb_backup, mb_biases_['mb_biases'],
                                                              bootstrapped_mse_components_['mb_variances'],
                                                              bootstrapped_mse_components_['mf_variances'],
                                                              bootstrapped_mse_components_['correlations'])

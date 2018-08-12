@@ -1,6 +1,6 @@
 import pdb
 import numpy as np
-import bellman_error_estimation as be
+import bellman_backup.bellman_backup as bb
 from helpers import maximize_q_function_at_block, update_pairwise_kernels_
 from sklearn.metrics.pairwise import rbf_kernel
 
@@ -67,7 +67,7 @@ def model_smoothed_fitted_q(env, gamma, regressor, number_of_value_iterations, t
   X, Xp1 = X[:-1, :], X[1:, :]
 
   pairwise_kernels_, kernel_sums = update_pairwise_kernels_(pairwise_kernels_, kernel, kernel_sums, X)
-  averaged_backup, mb_backup, mf_backup, kde_backup = be.model_smoothed_reward(env, transition_model,
+  averaged_backup, mb_backup, mf_backup, kde_backup = bb.model_smoothed_reward(env, transition_model,
                                                                                pairwise_kernels_,
                                                                                method=smoothing_method)
 
@@ -78,7 +78,7 @@ def model_smoothed_fitted_q(env, gamma, regressor, number_of_value_iterations, t
   # Fit longer-horizon q fns
   for k in range(number_of_value_iterations):
     averaged_backup, mb_backup, mf_backup, kde_backup, alpha_mb = \
-      be.model_smoothed_qmax(reg.predict, mb_backup, mf_backup, kde_backup, env, gamma, X, Xp1, transition_model,
+      bb.model_smoothed_qmax(reg.predict, mb_backup, mf_backup, kde_backup, env, gamma, X, Xp1, Sp1, transition_model,
                              pairwise_kernels_, method=smoothing_method)
     reg.fit(X, averaged_backup)
   # Maximize final q iterate to get next action

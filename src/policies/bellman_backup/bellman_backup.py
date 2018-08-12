@@ -18,9 +18,9 @@ method), I'm also trying just choosing alpha to minimize ( \alpha mb_backup + (1
 where kernel_backup is a kde estimator of backups.
 """
 import numpy as np
-import bellman_backup.kde_estimator as kde
-import bellman_backup.mse_estimator as mse
-from helpers import expected_q_max, maximize_q_function_at_block
+import kde_estimator as kde
+import mse_estimator as mse
+from src.policies.helpers import expected_q_max, maximize_q_function_at_block
 from scipy.stats import pearsonr
 from sklearn.metrics.pairwise import pairwise_kernels, rbf_kernel
 import pdb
@@ -111,26 +111,6 @@ def estimate_combination_weights(delta_mf, q_fn, env, gamma, X, Sp1, transition_
 
   # return {'var_delta_mf': var_delta_mf, 'var_delta_mb': var_delta_mb, 'correlation': correlation}
   return alpha_mb, alpha_mf
-
-
-def mb_backup(q_fn, env, gamma, X, transition_model, reward_only=False):
-  R_expected = transition_model.expected_glucose_reward_at_block(X, env)
-  if not reward_only:
-    expected_q_max_ = expected_q_max(q_fn, X, env, transition_model)
-    backup = R_expected + gamma * expected_q_max_
-  else:
-    backup = R_expected
-  return backup
-
-
-def mf_backup(q_fn, env, gamma, Xp1, reward_only=False):
-  R = np.hstack(env.R)
-  if not reward_only:
-    q_max = maximize_q_function_at_block(q_fn, Xp1, env)
-    backup = R + gamma * q_max
-  else:
-    backup = R
-  return backup
 
 
 def model_smoothed_reward(env, transition_model, pairwise_kernels_, method='kde', number_of_bootstrap_samples=100):
