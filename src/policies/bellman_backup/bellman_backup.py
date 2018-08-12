@@ -19,6 +19,7 @@ where kernel_backup is a kde estimator of backups.
 """
 import numpy as np
 import bellman_backup.kde_estimator as kde
+import bellman_backup.mse_estimator as mse
 from helpers import expected_q_max, maximize_q_function_at_block
 from scipy.stats import pearsonr
 from sklearn.metrics.pairwise import pairwise_kernels, rbf_kernel
@@ -154,9 +155,9 @@ def model_smoothed_reward(env, transition_model, pairwise_kernels_, method='kde'
     alpha_mb = kde.optimal_convex_combination(r_mb, r_mf, r_kde)
     alpha_mf = 1 - alpha_mb
   elif method == 'mse':
-    alpha_mb, alpha_mf = model_smoothed_backup_using_mse(r_mb, r_mf, None, env, None, X, Sp1, transition_model,
-                                                         pairwise_kernels_, reward_only=True,
-                                                         number_of_bootstrap_samples=number_of_bootstrap_samples)
+    alpha_mb, alpha_mf = mse.model_smoothed_reward_using_mse(r_mb, r_mf, env, X, Sp1, transition_model,
+                                                             pairwise_kernels_,
+                                                             number_of_bootstrap_samples=number_of_bootstrap_samples)
     r_kde = None
   return alpha_mb*r_mb + alpha_mf*r_mf, r_mb, r_mf, r_kde
 
@@ -191,9 +192,9 @@ def model_smoothed_qmax(q_fn, q_mf_backup, q_mb_backup, q_kde_backup, env, gamma
     alpha_mb = kde.optimal_convex_combination(q_mb_backup, q_mf_backup, q_kde_backup)
     alpha_mf = 1 - alpha_mb
   elif method == 'mse':
-    alpha_mb, alpha_mf = model_smoothed_backup_using_mse(q_mb_backup, q_mf_backup, q_fn, env, gamma, X, Xp1, Sp1,
-                                                         transition_model, pairwise_kernels_, reward_only=False,
-                                                         number_of_bootstrap_samples=number_of_bootstrap_samples)
+    alpha_mb, alpha_mf = mse.model_smoothed_qmax_using_mse(q_mb_backup, q_mf_backup, q_fn, env, gamma, X, Xp1, Sp1,
+                                                           transition_model, pairwise_kernels_,
+                                                           number_of_bootstrap_samples=number_of_bootstrap_samples)
 
   return alpha_mb*q_mb_backup + alpha_mf*q_mf_backup, q_mb_backup, q_mf_backup, q_kde_backup, alpha_mb
 
