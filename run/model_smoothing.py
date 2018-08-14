@@ -21,7 +21,7 @@ import multiprocessing as mp
 def fitted_q_with_model_smoothing(index):
   np.random.seed(index)
 
-  env = Glucose(horizon=1)
+  env = Glucose(horizon=30)
   gamma = 0.9
   number_of_value_iterations = 1
   transition_model_fitter = MultivariateLinear
@@ -49,7 +49,7 @@ def fitted_q_with_model_smoothing(index):
 
 
 if __name__ == '__main__':
-  n_replicate = 2
+  n_replicate = 30
   pool = mp.Pool(int(np.min((n_replicate, int(np.floor(mp.cpu_count() / 2))))))
   replicates_results_list = pool.map(fitted_q_with_model_smoothing, range(n_replicate))
 
