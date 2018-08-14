@@ -66,6 +66,7 @@ if __name__ == '__main__':
   # Write to file
   suffix = '.'.join([datetime.datetime.now().strftime("%y%m%d_%H%M%S"), 'yml'])
   basename = 'mse_smooth'
-  fname = '_'.join([results_dir, basename, suffix, '.yml'])
+  fname = '_'.join([basename, suffix])
+  fname = os.path.join(results_dir, fname)
   with open(fname, 'w') as outfile:
     yaml.dump(final_results, outfile)
