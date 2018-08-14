@@ -18,8 +18,8 @@ method), I'm also trying just choosing alpha to minimize ( \alpha mb_backup + (1
 where kernel_backup is a kde estimator of backups.
 """
 import numpy as np
-import kde_estimator as kde
-import mse_estimator as mse
+import src.policies.bellman_backup.kde_estimator as kde
+import src.policies.bellman_backup.mse_estimator as mse
 from src.policies.helpers import expected_q_max, maximize_q_function_at_block
 from scipy.stats import pearsonr
 from sklearn.metrics.pairwise import pairwise_kernels, rbf_kernel

@@ -1,0 +1,16 @@
+0:
+  alpha_mb: [0.5000362161112109]
+  mb_biases: [0.0]
+  mb_variances: [0.1]
+  mf_variances: [0.1]
+  score: -11.324339802915922
+1:
+  alpha_mb: [0.5000362161112109]
+  mb_biases: [0.0]
+  mb_variances: [0.1]
+  mf_variances: [0.1]
+  score: -11.324339802915922
+summary:
+  score list: [-11.324339802915922, -11.324339802915922]
+  score mean: -11.324339802915922
+  score se: 0.0

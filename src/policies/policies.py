@@ -1,7 +1,7 @@
 import pdb
 import numpy as np
-import bellman_backup.bellman_backup as bb
-from helpers import maximize_q_function_at_block, update_pairwise_kernels_
+import src.policies.bellman_backup.bellman_backup as bb
+from src.policies.helpers import maximize_q_function_at_block, update_pairwise_kernels_
 from sklearn.metrics.pairwise import rbf_kernel
 
 

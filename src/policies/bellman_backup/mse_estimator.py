@@ -55,8 +55,8 @@ def mse_components_for_reward(r_mf, r_mb, env, transition_model, number_of_boots
     # covariances_b_kernelized = np.dot(pairwise_kernels_, covariances_b)
     covariances += covariances_b
 
-  mf_variances = np.max([mf_variances, 0.1], axis=0)
-  mb_variances = np.max([mb_variances, 0.1], axis=0)
+  mf_variances = np.max([mf_variances, 0.001], axis=0)
+  mb_variances = np.max([mb_variances, 0.001], axis=0)
   correlations = covariances / np.sqrt(np.multiply(mb_variances, mf_variances))
   return {'mf_variances': mf_variances, 'mb_variances': mb_variances,
           'correlations': correlations}
@@ -104,8 +104,8 @@ def mse_components_for_qmax(q_fn, q_mb_backup, q_mf_backup, env, gamma, transiti
     # covariances_b_kernelized = np.dot(pairwise_kernels_, covariances_b)
     covariances += covariances_b
 
-  mf_variances = np.max([mf_variances, 0.1], axis=0)
-  mb_variances = np.max([mb_variances, 0.1], axis=0)
+  mf_variances = np.max([mf_variances, 0.001], axis=0)
+  mb_variances = np.max([mb_variances, 0.001], axis=0)
   correlations = covariances / np.sqrt(np.multiply(mb_variances, mf_variances))
   return {'mf_variances': mf_variances, 'mb_variances': mb_variances,
           'correlations': correlations}
@@ -200,9 +200,10 @@ def model_smoothed_qmax_using_mse(q_mb_backup, q_mf_backup, q_fn, env, gamma, X,
     mse_components_for_qmax(q_fn, q_mb_backup, q_mf_backup, env, gamma, transition_model, number_of_bootstrap_samples, X,
                              Xp1, Sp1, pairwise_kernels_)
 
-  mb_biases_ = kernel_bias_estimator(q_mb_backup, q_mf_backup, pairwise_kernels_)
+  bootstrapped_mse_components_['mb_biases'] = \
+    kernel_bias_estimator(q_mb_backup, q_mf_backup, pairwise_kernels_)['mb_biases']
 
-  alpha_mb, alpha_mf = estimate_weights_from_mse_components(q_mb_backup, mb_biases_['mb_biases'],
+  alpha_mb, alpha_mf = estimate_weights_from_mse_components(q_mb_backup, bootstrapped_mse_components_['mb_biases'],
                                                              bootstrapped_mse_components_['mb_variances'],
                                                              bootstrapped_mse_components_['mf_variances'],
                                                              bootstrapped_mse_components_['correlations'])
