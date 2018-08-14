@@ -135,11 +135,11 @@ def model_smoothed_reward(env, transition_model, pairwise_kernels_, method='kde'
     alpha_mb = kde.optimal_convex_combination(r_mb, r_mf, r_kde)
     alpha_mf = 1 - alpha_mb
   elif method == 'mse':
-    alpha_mb, alpha_mf = mse.model_smoothed_reward_using_mse(r_mb, r_mf, env, X, Sp1, transition_model,
-                                                             pairwise_kernels_,
-                                                             number_of_bootstrap_samples=number_of_bootstrap_samples)
+    alpha_mb, alpha_mf, bootstrapped_mse_components_ = \
+      mse.model_smoothed_reward_using_mse(r_mb, r_mf, env, X, Sp1, transition_model,
+                                          pairwise_kernels_, number_of_bootstrap_samples=number_of_bootstrap_samples)
     r_kde = None
-  return alpha_mb*r_mb + alpha_mf*r_mf, r_mb, r_mf, r_kde
+  return alpha_mb*r_mb + alpha_mf*r_mf, r_mb, r_mf, r_kde, bootstrapped_mse_components_
 
 
 def model_smoothed_qmax(q_fn, q_mf_backup, q_mb_backup, q_kde_backup, env, gamma, X, Xp1, Sp1, transition_model,
@@ -172,11 +172,13 @@ def model_smoothed_qmax(q_fn, q_mf_backup, q_mb_backup, q_kde_backup, env, gamma
     alpha_mb = kde.optimal_convex_combination(q_mb_backup, q_mf_backup, q_kde_backup)
     alpha_mf = 1 - alpha_mb
   elif method == 'mse':
-    alpha_mb, alpha_mf = mse.model_smoothed_qmax_using_mse(q_mb_backup, q_mf_backup, q_fn, env, gamma, X, Xp1, Sp1,
-                                                           transition_model, pairwise_kernels_,
-                                                           number_of_bootstrap_samples=number_of_bootstrap_samples)
+    alpha_mb, alpha_mf, bootstrapped_mse_components_ = \
+      mse.model_smoothed_qmax_using_mse(q_mb_backup, q_mf_backup, q_fn, env, gamma, X, Xp1, Sp1,
+                                        transition_model, pairwise_kernels_,
+                                        number_of_bootstrap_samples=number_of_bootstrap_samples)
 
-  return alpha_mb*q_mb_backup + alpha_mf*q_mf_backup, q_mb_backup, q_mf_backup, q_kde_backup, alpha_mb
+  return alpha_mb*q_mb_backup + alpha_mf*q_mf_backup, q_mb_backup, q_mf_backup, q_kde_backup, alpha_mb, \
+         bootstrapped_mse_components_
 
 
 

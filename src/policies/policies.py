@@ -67,9 +67,8 @@ def model_smoothed_fitted_q(env, gamma, regressor, number_of_value_iterations, t
   X, Xp1 = X[:-1, :], X[1:, :]
 
   pairwise_kernels_, kernel_sums = update_pairwise_kernels_(pairwise_kernels_, kernel, kernel_sums, X)
-  averaged_backup, mb_backup, mf_backup, kde_backup = bb.model_smoothed_reward(env, transition_model,
-                                                                               pairwise_kernels_,
-                                                                               method=smoothing_method)
+  averaged_backup, mb_backup, mf_backup, kde_backup, bootstrapped_mse_components_ = \
+    bb.model_smoothed_reward(env, transition_model, pairwise_kernels_, method=smoothing_method)
 
   # Fit one-step q fn
   reg = regressor()
@@ -77,7 +76,7 @@ def model_smoothed_fitted_q(env, gamma, regressor, number_of_value_iterations, t
 
   # Fit longer-horizon q fns
   for k in range(number_of_value_iterations):
-    averaged_backup, mb_backup, mf_backup, kde_backup, alpha_mb = \
+    averaged_backup, mb_backup, mf_backup, kde_backup, alpha_mb, bootstrapped_mse_components_ = \
       bb.model_smoothed_qmax(reg.predict, mb_backup, mf_backup, kde_backup, env, gamma, X, Xp1, Sp1, transition_model,
                              pairwise_kernels_, method=smoothing_method)
     reg.fit(X, averaged_backup)
@@ -86,7 +85,7 @@ def model_smoothed_fitted_q(env, gamma, regressor, number_of_value_iterations, t
 
   # Last entry of list gives optimal action at current state
   optimal_action = list_of_optimal_actions[-1]
-  return optimal_action, pairwise_kernels_, kernel_sums
+  return optimal_action, pairwise_kernels_, kernel_sums, bootstrapped_mse_components_, alpha_mb
 
 
 

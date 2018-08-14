@@ -142,11 +142,7 @@ def estimate_weights_from_mse_components(q_mb_backup, mb_biases, mb_variances, m
                                             (v_mb / k_mb**2))
   alpha_mf = np.max((0.0, np.min((1.0, alpha_mf))))
   alpha_mb = 1 - alpha_mf
-  print('alpha mb: {}\nmb_variances: {}\nmb_biases: {}\nmf_variances: {}\n correlations: {}'.format(alpha_mb,
-                                                                                                    mb_variances,
-                                                                                                    mb_biases,
-                                                                                                    mf_variances,
-                                                                                                    correlations))
+
   return alpha_mb, alpha_mf
 
 
@@ -178,7 +174,7 @@ def model_smoothed_reward_using_mse(r_mb, r_mf, env, X, Sp1, transition_model, p
                                                              bootstrapped_mse_components_['mf_variances'],
                                                              bootstrapped_mse_components_['correlations'])
 
-  return alpha_mb, alpha_mf
+  return alpha_mb, alpha_mf, bootstrapped_mse_components_
 
 
 def model_smoothed_qmax_using_mse(q_mb_backup, q_mf_backup, q_fn, env, gamma, X, Xp1, Sp1, transition_model,
@@ -211,4 +207,4 @@ def model_smoothed_qmax_using_mse(q_mb_backup, q_mf_backup, q_fn, env, gamma, X,
                                                              bootstrapped_mse_components_['mf_variances'],
                                                              bootstrapped_mse_components_['correlations'])
 
-  return alpha_mb, alpha_mf
+  return alpha_mb, alpha_mf, bootstrapped_mse_components_
