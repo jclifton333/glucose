@@ -171,9 +171,9 @@ class MultivariateLinear(TransitionDensityEstimator):
       n, p = X.shape
       self.sigma_hat = np.cov(errors_array.T) / np.max((n - p, 1))
 
-  def fit(self, X, Y):
+  def fit(self, X, Y, sample_weight=None):
     super(MultivariateLinear, self).fit(X, Y)
-    self.fitter.fit(X, Y)
+    self.fitter.fit(X, Y, sample_weight=sample_weight)
     self.get_variance_estimates(X, Y)
 
   def conditional_expectation(self, x):
@@ -186,8 +186,8 @@ class MultivariateLinear(TransitionDensityEstimator):
   def expected_glucose_reward_at_block(self, X, env):
     Sp1 = self.conditional_expectation_at_block(X)
     n = Sp1.shape[0]
-    R = np.array([env.reward_function(X[i, 4:7], Sp1[i, :]) for i in range(n)])
-    return R
+    r = np.array([env.reward_function(X[i, 4:7], Sp1[i, :]) for i in range(n)])
+    return r
 
   @staticmethod
   def get_xp1_from_x_and_sp1(x, sp1):

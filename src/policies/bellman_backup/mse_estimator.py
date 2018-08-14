@@ -20,35 +20,43 @@ def mf_backup(q_fn, env, gamma, Xp1):
 def mse_components_for_reward(r_mf, r_mb, env, transition_model, number_of_bootstrap_samples, X, Sp1, pairwise_kernels_):
   n = X.shape[0]
 
-  mf_variances = np.zeros(n)
-  mb_variances = np.zeros(n)
-  covariances = np.zeros(n)
+  mf_variances = 0.0
+  mb_variances = 0.0
+  covariances = 0.0
 
   bootstrap_r_mf_dbn = np.zeros((0, n))
   bootstrap_r_mb_dbn = np.zeros((0, n))
 
+  r_mf_sum = np.mean(r_mf)
+  r_mb_sum = np.mean(r_mb)
+
   for b in range(number_of_bootstrap_samples):
     # Compute backups
     multiplier = np.random.exponential(size=n)
-    X_b, Sp1_b, r_mf_b = np.multiply(X, multiplier), np.multiply(Sp1, multiplier), np.multiply(r_mf, multiplier)
-    transition_model.fit(X_b, Sp1_b)
+    r_mf_b = np.multiply(r_mf, multiplier)
+    transition_model.fit(X, Sp1, sample_weight=multiplier)
     r_mb_b = transition_model.expected_glucose_reward_at_block(X, env)
     bootstrap_r_mf_dbn = np.vstack((bootstrap_r_mf_dbn, r_mf_b))
     bootstrap_r_mb_dbn = np.vstack((bootstrap_r_mb_dbn, r_mb_b))
 
+    r_mf_b_sum = np.mean(r_mf_b)
+    r_mb_b_sum = np.mean(r_mb_b)
+
     # Update variance_estimates
-    mf_squared_error_b = (r_mf_b - r_mf)**2
-    mf_squared_error_b_kernelized = np.dot(pairwise_kernels_, mf_squared_error_b)
-    mf_variances += mf_squared_error_b_kernelized / number_of_bootstrap_samples
-    mb_squared_error_b = (r_mb_b - r_mb)**2
-    mb_squared_error_b_kernelized = np.dot(pairwise_kernels_, mb_squared_error_b)
-    mb_variances += mb_squared_error_b_kernelized / number_of_bootstrap_samples
+    mf_squared_error_b = (r_mf_b_sum - r_mf_sum)**2
+    # mf_squared_error_b_kernelized = np.dot(pairwise_kernels_, mf_squared_error_b)
+    mf_variances += mf_squared_error_b / number_of_bootstrap_samples
+    mb_squared_error_b = (r_mb_b_sum - r_mb_sum)**2
+    # mb_squared_error_b_kernelized = np.dot(pairwise_kernels_, mb_squared_error_b)
+    mb_variances += mb_squared_error_b / number_of_bootstrap_samples
 
     # Update covariance estimates
-    covariances_b = np.multiply(r_mf_b - r_mf, r_mb_b - r_mb)
-    covariances_b_kernelized = np.dot(pairwise_kernels_, covariances_b)
-    covariances += covariances_b_kernelized
+    covariances_b = np.multiply(r_mf_b_sum - r_mf_sum, r_mb_b_sum - r_mb_sum) / number_of_bootstrap_samples
+    # covariances_b_kernelized = np.dot(pairwise_kernels_, covariances_b)
+    covariances += covariances_b
 
+  mf_variances = np.max([mf_variances, 0.1], axis=0)
+  mb_variances = np.max([mb_variances, 0.1], axis=0)
   correlations = covariances / np.sqrt(np.multiply(mb_variances, mf_variances))
   return {'mf_variances': mf_variances, 'mb_variances': mb_variances,
           'correlations': correlations}
@@ -58,38 +66,46 @@ def mse_components_for_qmax(q_fn, q_mb_backup, q_mf_backup, env, gamma, transiti
                             X, Xp1, Sp1, pairwise_kernels_):
   n = X.shape[0]
 
-  mf_variances = np.zeros(n)
-  mb_variances = np.zeros(n)
-  covariances = np.zeros(n)
+  mf_variances = 0.0
+  mb_variances = 0.0
+  covariances = 0.0
 
   bootstrap_mb_backup_dbn = np.zeros((0, n))
   bootstrap_mf_backup_dbn = np.zeros((0, n))
 
+  q_mb_backup_sum = np.mean(q_mb_backup)
+  q_mf_backup_sum = np.mean(q_mf_backup)
+
   for b in range(number_of_bootstrap_samples):
     # Compute backups
     multiplier = np.random.exponential(size=n)
-    X_b, Sp1_b = np.multiply(multiplier, X), np.multiply(multiplier, Sp1)
-    Xp1_b, R_b = np.multiply(multiplier, Xp1), np.multiply(multiplier, np.hstack(env.R))
-    transition_model.fit(X_b, Sp1_b)
-    q_mb_backup_b = mb_backup(q_fn, env, gamma, X_b, transition_model)
+    Xp1_b = np.multiply(Xp1, multiplier.reshape(-1, 1))
+    transition_model.fit(X, Sp1, sample_weight=multiplier)
+    q_mb_backup_b = mb_backup(q_fn, env, gamma, X, transition_model)
     q_mf_backup_b = mf_backup(q_fn, env, gamma, Xp1_b)
+    q_mb_backup_b_sum = np.mean(q_mb_backup_b)
+    q_mf_backup_b_sum = np.mean(q_mf_backup_b)
     bootstrap_mf_backup_dbn = np.vstack((bootstrap_mf_backup_dbn, q_mf_backup_b))
     bootstrap_mb_backup_dbn = np.vstack((bootstrap_mb_backup_dbn, q_mb_backup_b))
 
     # Update variance_estimates
-    mf_squared_error_b = (q_mf_backup_b - q_mf_backup)**2
-    mf_squared_error_b_kernelized = np.dot(pairwise_kernels_, mf_squared_error_b)
-    mf_variances += mf_squared_error_b_kernelized / number_of_bootstrap_samples
-    mb_squared_error_b = (q_mb_backup_b - q_mb_backup)**2
-    mb_squared_error_b_kernelized = np.dot(pairwise_kernels_, mb_squared_error_b)
-    mb_variances += mb_squared_error_b_kernelized / number_of_bootstrap_samples
+    # mf_squared_error_b = (q_mf_backup_b - q_mf_backup)**2
+    # mf_squared_error_b_kernelized = np.dot(pairwise_kernels_, mf_squared_error_b)
+    mf_squared_error_b = (q_mf_backup_sum - q_mf_backup_b_sum)**2
+    mf_variances += mf_squared_error_b / number_of_bootstrap_samples
+    # mb_squared_error_b = (q_mb_backup_b - q_mb_backup)**2
+    # mb_squared_error_b_kernelized = np.dot(pairwise_kernels_, mb_squared_error_b)
+    mb_squared_error_b = (q_mb_backup_sum - q_mb_backup_b_sum)**2
+    mb_variances += mb_squared_error_b / number_of_bootstrap_samples
 
     # Update covariance estimates
-    covariances_b = np.multiply(q_mf_backup_b - q_mf_backup, q_mb_backup_b - q_mb_backup)
-    covariances_b_kernelized = np.dot(pairwise_kernels_, covariances_b)
-    covariances += covariances_b_kernelized
+    covariances_b = np.multiply(q_mf_backup_b_sum - q_mf_backup_sum, q_mb_backup_b_sum - q_mb_backup_sum) / \
+                    number_of_bootstrap_samples
+    # covariances_b_kernelized = np.dot(pairwise_kernels_, covariances_b)
+    covariances += covariances_b
 
-  mf_variances = np.max([mf_variances, np.ones(n)*0.1], axis=0)
+  mf_variances = np.max([mf_variances, 0.1], axis=0)
+  mb_variances = np.max([mb_variances, 0.1], axis=0)
   correlations = covariances / np.sqrt(np.multiply(mb_variances, mf_variances))
   return {'mf_variances': mf_variances, 'mb_variances': mb_variances,
           'correlations': correlations}
@@ -98,30 +114,39 @@ def mse_components_for_qmax(q_fn, q_mb_backup, q_mf_backup, env, gamma, transiti
 def kernel_bias_estimator(q_mb_backup, q_mf_backup, pairwise_kernels_):
 
   # Compare mb backups to (kernel-smoothed) mf backups
-  mb_biases = np.dot(pairwise_kernels_, q_mb_backup - q_mf_backup)
+  mb_biases = np.mean(np.dot(pairwise_kernels_, q_mb_backup - q_mf_backup))
 
-  return {'mb_biases': np.array(mb_biases)}
+  return {'mb_biases': mb_biases}
 
 
 def estimate_weights_from_mse_components(q_mb_backup, mb_biases, mb_variances, mf_variances, correlations):
   # ToDo: Think about how to get preliminary estimate of q_backup
-  q_backup_hat = q_mb_backup - mb_biases
+  q_mb_backup_sum = np.sum(q_mb_backup)
+  q_backup_hat = q_mb_backup_sum - mb_biases
 
   # Estimate bias coefficients k
-  k_mb = q_mb_backup / q_backup_hat
+  k_mb = q_mb_backup_sum / q_backup_hat
   k_mf = 1  # q_mf_backup is unbiased
 
-  # Estimate signal-to-noise ratios v
-  v_mf = mf_variances / q_backup_hat
-  v_mb = mb_variances / q_backup_hat
+  # Estimate coefficients of variation v
+  v_mf = mf_variances / q_backup_hat**2
+  v_mb = mb_variances / q_backup_hat**2
 
   # Estimate lambda
-  lambda_ = (k_mf ** 2 * v_mb) / (k_mb ** 2 * v_mf)
+  lambda_ = np.sqrt((k_mf ** 2 * v_mb) / (k_mb ** 2 * v_mf))
 
   # Estimate alphas
+  correlations = 0.0
   alpha_mf = \
-    (lambda_ * (lambda_ - correlations)) / (1 - 2 * correlations * lambda_ + lambda_ ** 2 + (1 + correlations ** 2) * (v_mf / k_mb))
+    (lambda_ * (lambda_ - correlations)) / (1 - 2 * correlations * lambda_ + lambda_ ** 2 + (1 + correlations ** 2) *
+                                            (v_mb / k_mb**2))
+  alpha_mf = np.max((0.0, np.min((1.0, alpha_mf))))
   alpha_mb = 1 - alpha_mf
+  print('alpha mb: {}\nmb_variances: {}\nmb_biases: {}\nmf_variances: {}\n correlations: {}'.format(alpha_mb,
+                                                                                                    mb_variances,
+                                                                                                    mb_biases,
+                                                                                                    mf_variances,
+                                                                                                    correlations))
   return alpha_mb, alpha_mf
 
 
